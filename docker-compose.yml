@@ -7,7 +7,7 @@ services:
     image: alpine/git:latest
     # Comando para clonar a versão PÚBLICA do repositório (para o nosso teste).
     command: >
-      sh -c "git clone https://github.com/ramonmirandaa-crypto/finance-app.git /source && chmod -R 777 /source"
+      sh -c "git clone https://github.com/ramonmirandaa-crypto/finance-app.git /source; echo 'Comando git clone finalizado. Entrando em modo de espera.'; sleep infinity"
     volumes:
       - source-code:/source # Salva o código clonado no volume 'source-code'.
 
