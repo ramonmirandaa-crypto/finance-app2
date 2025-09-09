@@ -6,6 +6,8 @@ services:
     container_name: finance-app-backend
     restart: unless-stopped
     working_dir: /usr/src/app
+    tty: true
+    command: ["/bin/sh", "-c", "sleep 3600"]
     volumes:
       # Caminho direto e absoluto para a pasta com o código que clonamos.
       - /mnt/dados/finance-app/finance-app:/usr/src/app
