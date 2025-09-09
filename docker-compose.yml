@@ -1,15 +1,12 @@
-version: '3.8'
-
-services:
-  backend:
+backend:
     image: node:18-alpine
     container_name: finance-app-backend
     restart: unless-stopped
     working_dir: /usr/src/app
-    tty: true
-    command: ["/bin/sh", "-c", "sleep 3600"]
+  
+    command: ["node", "src/server.js"]
+    
     volumes:
-      # Caminho direto e absoluto para a pasta com o código que clonamos.
       - /mnt/dados/finance-app/finance-app:/usr/src/app
     ports:
       - "3333:3333"
@@ -22,24 +19,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:3333/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-  db:
-    image: postgres:15-alpine
-    container_name: finance-app-postgres
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
-    volumes:
-      - /mnt/dados/finance-app/postgres-data:/var/lib/postgresql/data
