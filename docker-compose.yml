@@ -9,11 +9,8 @@ services:
     restart: unless-stopped
     working_dir: /usr/src/app
     volumes:
-      # AJUSTE E PONTO CRÍTICO:
-      # Este caminho agora assume que, no seu servidor TrueNAS, você terá o
-      # arquivo docker-compose.yml e, AO LADO DELE, uma pasta chamada 'finance-app'
-      # que contém todo o seu código-fonte (package.json, src/, etc.).
-      - .:/usr/src/app
+      # Mapeia a raiz do projeto (onde o package.json está) para o diretório de trabalho do contêiner.
+      - ./:/usr/src/app
     tty: true
     command: ["/bin/sh", "-c", "sleep 3600"]
     ports:
