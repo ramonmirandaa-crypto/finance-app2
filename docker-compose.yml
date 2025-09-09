@@ -1,24 +1,24 @@
 version: '3.8'
 
 services:
-  # 1. Contêiner temporário para clonar o repositório
+  # 1. Contêiner temporário para clonar o repositório.
+  #    Ele executa uma vez e depois para.
   init:
     image: alpine/git:latest
-    # Comando para clonar o repositório para a pasta /source
-    # ATENÇÃO: Substitua <SEU_USUARIO> e <SEU_TOKEN> abaixo
+    # Comando para clonar a versão PÚBLICA do repositório (para o nosso teste).
     command: >
       sh -c "git clone https://github.com/ramonmirandaa-crypto/finance-app.git /source && chmod -R 777 /source"
     volumes:
-      - source-code:/source # Monta o volume nomeado 'source-code' na pasta /source
+      - source-code:/source # Salva o código clonado no volume 'source-code'.
 
-  # 2. Contêiner da Aplicação Backend
+  # 2. Contêiner da Aplicação Backend.
   backend:
     image: node:18-alpine
     container_name: finance-app-backend
     restart: unless-stopped
     working_dir: /usr/src/app
     volumes:
-      - source-code:/usr/src/app # Usa os arquivos do volume 'source-code'
+      - source-code:/usr/src/app # Usa os arquivos que o 'init' preparou.
     ports:
       - "3333:3333"
     environment:
@@ -29,11 +29,11 @@ services:
       - JWT_SECRET=${JWT_SECRET}
     depends_on:
       db:
-        condition: service_healthy # Garante que o DB esteja saudável
+        condition: service_healthy # Espera o DB ficar saudável.
       init:
-        condition: service_completed_successfully # Garante que o 'init' terminou com sucesso
+        condition: service_completed_successfully # Espera o 'init' terminar com sucesso.
 
-  # 3. Contêiner do Banco de Dados (sem alterações)
+  # 3. Contêiner do Banco de Dados.
   db:
     image: postgres:15-alpine
     container_name: finance-app-postgres
@@ -50,6 +50,6 @@ services:
     volumes:
       - /mnt/dados/finance-app/postgres-data:/var/lib/postgresql/data
 
-# 4. Define o 'disco virtual' (volume nomeado) que será compartilhado
+# 4. Define o "disco virtual" (volume nomeado) que será compartilhado.
 volumes:
   source-code:
