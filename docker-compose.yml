@@ -7,7 +7,7 @@ services:
     # Comando para clonar o repositório para a pasta /source
     # ATENÇÃO: Substitua <SEU_USUARIO> e <SEU_TOKEN> abaixo
     command: >
-      sh -c "git clone https://<SEU_USUARIO>:<SEU_TOKEN>@github.com/ramonmirandaa-crypto/finance-app.git /source && chmod -R 777 /source"
+      sh -c "git clone https://github.com/ramonmirandaa-crypto/finance-app.git /source && chmod -R 777 /source"
     volumes:
       - source-code:/source # Monta o volume nomeado 'source-code' na pasta /source
 
