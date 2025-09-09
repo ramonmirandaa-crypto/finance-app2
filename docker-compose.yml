@@ -1,15 +1,14 @@
 version: '3.8'
 
 services:
-  # 1. Contêiner temporário para clonar o repositório.
-  #    Ele executa uma vez e depois para.
+  # 1. Contêiner de diagnóstico para clonar o repositório.
   init:
     image: alpine/git:latest
-    # Comando para clonar a versão PÚBLICA do repositório (para o nosso teste).
+    # COMANDO DE DIAGNÓSTICO: Tenta clonar e depois dorme para sempre.
     command: >
       sh -c "git clone https://github.com/ramonmirandaa-crypto/finance-app.git /source; echo 'Comando git clone finalizado. Entrando em modo de espera.'; sleep infinity"
     volumes:
-      - source-code:/source # Salva o código clonado no volume 'source-code'.
+      - source-code:/source
 
   # 2. Contêiner da Aplicação Backend.
   backend:
@@ -18,7 +17,7 @@ services:
     restart: unless-stopped
     working_dir: /usr/src/app
     volumes:
-      - source-code:/usr/src/app # Usa os arquivos que o 'init' preparou.
+      - source-code:/usr/src/app
     ports:
       - "3333:3333"
     environment:
@@ -29,9 +28,9 @@ services:
       - JWT_SECRET=${JWT_SECRET}
     depends_on:
       db:
-        condition: service_healthy # Espera o DB ficar saudável.
+        condition: service_healthy
       init:
-        condition: service_completed_successfully # Espera o 'init' terminar com sucesso.
+        condition: service_completed_successfully
 
   # 3. Contêiner do Banco de Dados.
   db:
@@ -50,6 +49,6 @@ services:
     volumes:
       - /mnt/dados/finance-app/postgres-data:/var/lib/postgresql/data
 
-# 4. Define o "disco virtual" (volume nomeado) que será compartilhado.
+# 4. Define o volume nomeado que será compartilhado.
 volumes:
   source-code:
