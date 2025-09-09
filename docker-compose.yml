@@ -1,26 +1,55 @@
-backend:
+version: '3.8'
+
+services:
+  backend:
     image: node:18-alpine
     container_name: finance-app-backend
     restart: unless-stopped
     working_dir: /usr/src/app
-  
+    
+    # Comando explícito para iniciar a aplicação, que se provou funcional.
     command: ["node", "src/server.js"]
     
     volumes:
+      # Mapeia a pasta do código clonado no servidor para a pasta de trabalho do contêiner.
       - /mnt/dados/finance-app/finance-app:/usr/src/app
+      
     ports:
       - "3333:3333"
+      
     environment:
       - DATABASE_HOST=db
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - DATABASE_NAME=${POSTGRES_DB}
       - JWT_SECRET=${JWT_SECRET}
+      
     depends_on:
       db:
         condition: service_healthy
+        
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:3333/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+
+  db:
+    image: postgres:15-alpine
+    container_name: finance-app-postgres
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      
+    volumes:
+      # Mapeia a pasta de dados persistentes no servidor para a pasta de dados do PostgreSQL.
+      - /mnt/dados/finance-app/postgres-data:/var/lib/postgresql/data
