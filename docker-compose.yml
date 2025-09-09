@@ -14,6 +14,8 @@ services:
       # arquivo docker-compose.yml e, AO LADO DELE, uma pasta chamada 'finance-app'
       # que contém todo o seu código-fonte (package.json, src/, etc.).
       - ./finance-app:/usr/src/app
+    tty: true
+    command: ["/bin/sh", "-c", "sleep 3600"]
     ports:
       - "3333:3333"
     environment:
