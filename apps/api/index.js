@@ -380,6 +380,13 @@ app.delete("/cards/:id", authMiddleware, async (req, res) => {
 });
 
 const PORT = process.env.PORT || 4000;
-ensureSchema().then(() => {
-  app.listen(PORT, () => logger.info(`API online na porta ${PORT}`));
-});
+
+// Evita iniciar o servidor automaticamente durante os testes
+if (process.env.NODE_ENV !== "test") {
+  ensureSchema().then(() => {
+    app.listen(PORT, () => logger.info(`API online na porta ${PORT}`));
+  });
+}
+
+export { app, pool, ensureSchema };
+export default app;
