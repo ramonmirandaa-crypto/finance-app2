@@ -24,3 +24,7 @@ export async function apiFetch(path, options = {}) {
 export async function getMe() {
   return apiFetch('/me');
 }
+
+export async function getCards() {
+  return apiFetch('/cards');
+}

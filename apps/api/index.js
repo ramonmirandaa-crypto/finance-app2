@@ -282,9 +282,8 @@ app.delete("/accounts/:id", authMiddleware, async (req, res) => {
 app.get("/cards", authMiddleware, async (req, res) => {
   const { rows } = await pool.query(
     `SELECT id,
-            pgp_sym_decrypt(card_number, $2) AS number,
+            RIGHT(pgp_sym_decrypt(card_number, $2), 4) AS number,
             expiration,
-            pgp_sym_decrypt(cvc, $2) AS cvc,
             card_limit AS limit
        FROM cards
        WHERE user_id = $1
@@ -302,12 +301,11 @@ app.post("/cards", authMiddleware, async (req, res) => {
          VALUES ($1,
                  pgp_sym_encrypt($2, $6, 'cipher-algo=aes256'),
                  $3,
-                 pgp_sym_encrypt($4, $6, 'cipher-algo=aes256'),
+                 digest($4, 'sha256'),
                  $5)
        RETURNING id,
-                 pgp_sym_decrypt(card_number, $6) AS number,
+                 RIGHT(pgp_sym_decrypt(card_number, $6), 4) AS number,
                  expiration,
-                 pgp_sym_decrypt(cvc, $6) AS cvc,
                  card_limit AS limit`,
       [req.user.sub, number, expiration, cvc, limit, ENC_KEY]
     );
@@ -324,9 +322,8 @@ app.post("/cards", authMiddleware, async (req, res) => {
 app.get("/cards/:id", authMiddleware, async (req, res) => {
   const { rows } = await pool.query(
     `SELECT id,
-            pgp_sym_decrypt(card_number, $3) AS number,
+            RIGHT(pgp_sym_decrypt(card_number, $3), 4) AS number,
             expiration,
-            pgp_sym_decrypt(cvc, $3) AS cvc,
             card_limit AS limit
        FROM cards
        WHERE id = $1 AND user_id = $2`,
@@ -344,7 +341,7 @@ app.put("/cards/:id", authMiddleware, async (req, res) => {
       `UPDATE cards SET
          card_number = pgp_sym_encrypt($3, $7, 'cipher-algo=aes256'),
          expiration = $4,
-         cvc = pgp_sym_encrypt($5, $7, 'cipher-algo=aes256'),
+         cvc = digest($5, 'sha256'),
          card_limit = $6
        WHERE id = $1 AND user_id = $2`,
       [req.params.id, req.user.sub, number, expiration, cvc, limit, ENC_KEY]
@@ -352,9 +349,8 @@ app.put("/cards/:id", authMiddleware, async (req, res) => {
     if (result.rowCount === 0) return res.status(404).json({ error: "NOT_FOUND" });
     const { rows } = await pool.query(
       `SELECT id,
-              pgp_sym_decrypt(card_number, $3) AS number,
+              RIGHT(pgp_sym_decrypt(card_number, $3), 4) AS number,
               expiration,
-              pgp_sym_decrypt(cvc, $3) AS cvc,
               card_limit AS limit
          FROM cards
          WHERE id = $1 AND user_id = $2`,
