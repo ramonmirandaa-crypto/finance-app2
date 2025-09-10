@@ -4,7 +4,9 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import pkg from "pg";
 
-dotenv.config();
+dotenv.config({
+  path: process.env.NODE_ENV === "test" ? ".env.test" : undefined,
+});
 const { Pool } = pkg;
 
 const app = express();
@@ -115,6 +117,11 @@ app.get("/me", authMiddleware, async (req, res) => {
 });
 
 const PORT = process.env.PORT || 4000;
-ensureSchema().then(() => {
-  app.listen(PORT, () => console.log(`API online na porta ${PORT}`));
-});
+
+if (process.env.NODE_ENV !== "test") {
+  ensureSchema().then(() => {
+    app.listen(PORT, () => console.log(`API online na porta ${PORT}`));
+  });
+}
+
+export { app, pool, ensureSchema };
