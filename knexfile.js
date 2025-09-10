@@ -10,7 +10,7 @@ module.exports = {
       database: process.env.POSTGRES_DB
     },
     migrations: {
-      directory: './src/database/migrations'
+      directory: './apps/api/database/migrations'
     }
   }
 };
