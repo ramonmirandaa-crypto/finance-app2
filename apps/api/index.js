@@ -3,6 +3,11 @@ import dotenv from "dotenv";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import pkg from "pg";
+import {
+  createConnectToken,
+  fetchAccounts,
+  fetchTransactions,
+} from "./pluggy.js";
 
 dotenv.config();
 const { Pool } = pkg;
@@ -112,6 +117,41 @@ app.post("/auth/login", async (req, res) => {
 app.get("/me", authMiddleware, async (req, res) => {
   const { rows } = await pool.query("SELECT id, name, email, created_at FROM users WHERE id = $1", [req.user.sub]);
   res.json({ user: rows[0] || null });
+});
+
+// Pluggy
+app.post("/pluggy/connect", authMiddleware, async (_req, res) => {
+  try {
+    const tokenData = await createConnectToken();
+    res.json(tokenData);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "PLUGGY_ERROR" });
+  }
+});
+
+app.get("/pluggy/accounts", authMiddleware, async (req, res) => {
+  try {
+    const { itemId } = req.query;
+    if (!itemId) return res.status(400).json({ error: "ITEM_ID_REQUIRED" });
+    const accounts = await fetchAccounts(itemId);
+    res.json({ accounts });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "PLUGGY_ERROR" });
+  }
+});
+
+app.get("/pluggy/transactions", authMiddleware, async (req, res) => {
+  try {
+    const { accountId } = req.query;
+    if (!accountId) return res.status(400).json({ error: "ACCOUNT_ID_REQUIRED" });
+    const transactions = await fetchTransactions(accountId);
+    res.json({ transactions });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "PLUGGY_ERROR" });
+  }
 });
 
 const PORT = process.env.PORT || 4000;
