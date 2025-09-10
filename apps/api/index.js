@@ -7,12 +7,14 @@ import pkg from "pg";
 dotenv.config();
 const { Pool } = pkg;
 
+const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3000";
+
 const app = express();
 app.use(express.json());
 
 // CORS restrito à origem do seu frontend
 app.use((req, res, next) => {
-  const origin = 'http://192.168.0.18:3000';
+  const origin = CORS_ORIGIN;
   res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
