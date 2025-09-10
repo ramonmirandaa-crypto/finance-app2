@@ -22,3 +22,5 @@ Campos sensíveis dessas entidades são armazenados criptografados com AES‑256
 ### Variáveis de ambiente
 
 - `DATA_ENCRYPTION_KEY`: chave usada para criptografia simétrica dos dados (opcional, padrão `devkey`).
+- `PLUGGY_BASE_URL`: URL base da API do Pluggy (padrão `https://api.pluggy.ai`).
+  Use `https://api.meupluggy.com` para conectar ao MeuPluggy.

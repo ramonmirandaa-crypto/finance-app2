@@ -3,9 +3,16 @@ import dotenv from "dotenv";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import pkg from "pg";
+import Pluggy from "pluggy-sdk";
 
 dotenv.config();
 const { Pool } = pkg;
+
+const pluggy = new Pluggy({
+  clientId: process.env.PLUGGY_CLIENT_ID,
+  clientSecret: process.env.PLUGGY_CLIENT_SECRET,
+  baseUrl: process.env.PLUGGY_BASE_URL || "https://api.pluggy.ai",
+});
 
 const app = express();
 app.use(express.json());
