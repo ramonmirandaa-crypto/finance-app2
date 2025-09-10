@@ -1,5 +1,25 @@
-# Dependências do Node
-node_modules
+# Dependências
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# Arquivo de variáveis de ambiente
+# Builds / cache
+.next/
+dist/
+out/
+coverage/
+
+# Docker volumes e artefatos locais
+postgres-data/
+**/.DS_Store
+
+# Env (NUNCA subir segredos)
+*.env
 .env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
