@@ -1,6 +1,6 @@
 import { auth } from './auth';
 
-const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://192.168.0.18:4000';
+const BASE = process.env.NEXT_PUBLIC_API_URL;
 
 export async function apiFetch(path, options = {}) {
   const token = auth.get();
