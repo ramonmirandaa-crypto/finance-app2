@@ -4,7 +4,9 @@
   "description": "Aplicação de finanças pessoais para Ramon Miranda.",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "test": "echo \"No unit tests\"",
+    "e2e": "cypress run"
   },
   "author": "Ramon Miranda",
   "license": "ISC",
@@ -15,5 +17,8 @@
     "jsonwebtoken": "^9.0.2",
     "knex": "^3.0.1",
     "pg": "^8.11.3"
+  },
+  "devDependencies": {
+    "cypress": "^13.17.0"
   }
 }
