@@ -3,11 +3,18 @@ import dotenv from "dotenv";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import pkg from "pg";
+import * as Sentry from "@sentry/node";
 
 dotenv.config();
 const { Pool } = pkg;
 
+Sentry.init({
+  dsn: process.env.SENTRY_DSN || undefined,
+  tracesSampleRate: 1.0,
+});
+
 const app = express();
+app.use(Sentry.Handlers.requestHandler());
 app.use(express.json());
 
 // CORS restrito à origem do seu frontend
@@ -86,6 +93,7 @@ app.post("/auth/register", async (req, res) => {
       return res.status(409).json({ error: "EMAIL_ALREADY_EXISTS" });
     }
     console.error(e);
+    Sentry.captureException(e);
     res.status(500).json({ error: "INTERNAL_ERROR" });
   }
 });
@@ -104,6 +112,7 @@ app.post("/auth/login", async (req, res) => {
     res.json({ user: { id: user.id, name: user.name, email: user.email }, token });
   } catch (e) {
     console.error(e);
+    Sentry.captureException(e);
     res.status(500).json({ error: "INTERNAL_ERROR" });
   }
 });
@@ -115,6 +124,8 @@ app.get("/me", authMiddleware, async (req, res) => {
 });
 
 const PORT = process.env.PORT || 4000;
+app.use(Sentry.Handlers.errorHandler());
+
 ensureSchema().then(() => {
   app.listen(PORT, () => console.log(`API online na porta ${PORT}`));
 });
