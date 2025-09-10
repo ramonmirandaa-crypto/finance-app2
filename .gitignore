@@ -23,3 +23,6 @@ postgres-data/
 # Logs
 *.log
 logs/
+
+# Backup files
+*.bak
