@@ -19,6 +19,7 @@ services:
     env_file: ./apps/api/.env
     environment:
       - ALLOWED_ORIGIN=${ALLOWED_ORIGIN:-http://localhost:3000}
+      - DATA_ENCRYPTION_KEY=${DATA_ENCRYPTION_KEY:-devkey}
     ports:
       - "4000:4000"
     depends_on:
