@@ -46,3 +46,15 @@ export async function createCard(data) {
     body: JSON.stringify(data),
   });
 }
+
+export async function getPluggyLinkToken() {
+  return apiFetch('/pluggy/link-token', { method: 'POST' });
+}
+
+export async function getPluggyItems() {
+  return apiFetch('/pluggy/items');
+}
+
+export async function syncPluggyItem(id) {
+  return apiFetch(`/pluggy/items/${id}/sync`, { method: 'POST' });
+}
