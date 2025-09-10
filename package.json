@@ -2,9 +2,9 @@
   "name": "finance-app",
   "version": "1.0.0",
   "description": "Aplicação de finanças pessoais para Ramon Miranda.",
-  "main": "src/server.js",
+  "main": "apps/api/index.js",
   "scripts": {
-    "start": "node src/server.js",
+    "start": "node apps/api/index.js",
     "test": "echo \"No unit tests\"",
     "e2e": "cypress run"
   },
