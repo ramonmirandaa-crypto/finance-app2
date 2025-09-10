@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node apps/api/index.js",
     "test": "echo \"No unit tests\"",
-    "e2e": "cypress run"
+    "e2e": "cypress run",
+    "backup": "node scripts/backup.js"
   },
   "author": "Ramon Miranda",
   "license": "ISC",
@@ -14,8 +15,10 @@
     "bcryptjs": "^2.4.3",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
+    "googleapis": "^159.0.0",
     "jsonwebtoken": "^9.0.2",
     "knex": "^3.0.1",
+    "node-cron": "^4.2.1",
     "pg": "^8.11.3"
   },
   "devDependencies": {
