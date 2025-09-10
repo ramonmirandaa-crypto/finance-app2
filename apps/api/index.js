@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import pkg from "pg";
 import Pluggy from "pluggy-sdk";
+import { z } from "zod";
 
 dotenv.config();
 const { Pool } = pkg;
@@ -38,6 +39,31 @@ const pool = new Pool({
 });
 
 const ENC_KEY = process.env.DATA_ENCRYPTION_KEY || "devkey";
+
+const RegisterSchema = z.object({
+  name: z.string(),
+  email: z.string().email(),
+  password: z.string().min(8),
+});
+
+const LoginSchema = z.object({
+  email: z.string().email(),
+  password: z.string(),
+});
+
+const AccountSchema = z.object({
+  agency: z.string(),
+  number: z.string(),
+  manager: z.string().optional(),
+  phone: z.string().optional(),
+});
+
+const CardSchema = z.object({
+  number: z.string(),
+  expiration: z.string(),
+  cvc: z.string(),
+  limit: z.number(),
+});
 
 // Cria extensão e tabela users se não existirem
 async function ensureSchema() {
@@ -102,10 +128,7 @@ app.get("/", (req, res) => {
 // Registro
 app.post("/auth/register", async (req, res) => {
   try {
-    const { name, email, password } = req.body || {};
-    if (!name || !email || !password) {
-      return res.status(400).json({ error: "VALIDATION_ERROR" });
-    }
+    const { name, email, password } = await RegisterSchema.parseAsync(req.body);
     const hash = await bcrypt.hash(password, 10);
     const { rows } = await pool.query(
       "INSERT INTO users (name, email, password_hash) VALUES ($1,$2,$3) RETURNING id, name, email, created_at",
@@ -115,6 +138,9 @@ app.post("/auth/register", async (req, res) => {
     const token = signToken(user);
     res.status(201).json({ user, token });
   } catch (e) {
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
+    }
     if (String(e).includes("duplicate key")) {
       return res.status(409).json({ error: "EMAIL_ALREADY_EXISTS" });
     }
@@ -126,8 +152,7 @@ app.post("/auth/register", async (req, res) => {
 // Login
 app.post("/auth/login", async (req, res) => {
   try {
-    const { email, password } = req.body || {};
-    if (!email || !password) return res.status(400).json({ error: "VALIDATION_ERROR" });
+    const { email, password } = await LoginSchema.parseAsync(req.body);
     const { rows } = await pool.query("SELECT * FROM users WHERE email = $1", [email.toLowerCase()]);
     const user = rows[0];
     if (!user) return res.status(401).json({ error: "INVALID_CREDENTIALS" });
@@ -136,6 +161,9 @@ app.post("/auth/login", async (req, res) => {
     const token = signToken(user);
     res.json({ user: { id: user.id, name: user.name, email: user.email }, token });
   } catch (e) {
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
+    }
     console.error(e);
     res.status(500).json({ error: "INTERNAL_ERROR" });
   }
@@ -164,8 +192,7 @@ app.get("/accounts", authMiddleware, async (req, res) => {
 
 app.post("/accounts", authMiddleware, async (req, res) => {
   try {
-    const { agency, number, manager, phone } = req.body || {};
-    if (!agency || !number) return res.status(400).json({ error: "VALIDATION_ERROR" });
+    const { agency, number, manager, phone } = await AccountSchema.parseAsync(req.body);
     const { rows } = await pool.query(
       `INSERT INTO accounts (user_id, agency, account_number, manager, phone)
          VALUES ($1, $2,
@@ -180,6 +207,9 @@ app.post("/accounts", authMiddleware, async (req, res) => {
     );
     res.status(201).json({ account: rows[0] });
   } catch (e) {
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
+    }
     console.error(e);
     res.status(500).json({ error: "INTERNAL_ERROR" });
   }
@@ -202,8 +232,7 @@ app.get("/accounts/:id", authMiddleware, async (req, res) => {
 
 app.put("/accounts/:id", authMiddleware, async (req, res) => {
   try {
-    const { agency, number, manager, phone } = req.body || {};
-    if (!agency || !number) return res.status(400).json({ error: "VALIDATION_ERROR" });
+    const { agency, number, manager, phone } = await AccountSchema.parseAsync(req.body);
     const result = await pool.query(
       `UPDATE accounts SET
          agency = $3,
@@ -225,6 +254,9 @@ app.put("/accounts/:id", authMiddleware, async (req, res) => {
     );
     res.json({ account: rows[0] });
   } catch (e) {
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
+    }
     console.error(e);
     res.status(500).json({ error: "INTERNAL_ERROR" });
   }
@@ -257,10 +289,7 @@ app.get("/cards", authMiddleware, async (req, res) => {
 
 app.post("/cards", authMiddleware, async (req, res) => {
   try {
-    const { number, expiration, cvc, limit } = req.body || {};
-    if (!number || !expiration || !cvc || limit == null) {
-      return res.status(400).json({ error: "VALIDATION_ERROR" });
-    }
+    const { number, expiration, cvc, limit } = await CardSchema.parseAsync(req.body);
     const { rows } = await pool.query(
       `INSERT INTO cards (user_id, card_number, expiration, cvc, card_limit)
          VALUES ($1,
@@ -277,6 +306,9 @@ app.post("/cards", authMiddleware, async (req, res) => {
     );
     res.status(201).json({ card: rows[0] });
   } catch (e) {
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
+    }
     console.error(e);
     res.status(500).json({ error: "INTERNAL_ERROR" });
   }
@@ -300,10 +332,7 @@ app.get("/cards/:id", authMiddleware, async (req, res) => {
 
 app.put("/cards/:id", authMiddleware, async (req, res) => {
   try {
-    const { number, expiration, cvc, limit } = req.body || {};
-    if (!number || !expiration || !cvc || limit == null) {
-      return res.status(400).json({ error: "VALIDATION_ERROR" });
-    }
+    const { number, expiration, cvc, limit } = await CardSchema.parseAsync(req.body);
     const result = await pool.query(
       `UPDATE cards SET
          card_number = pgp_sym_encrypt($3, $7, 'cipher-algo=aes256'),
@@ -326,6 +355,9 @@ app.put("/cards/:id", authMiddleware, async (req, res) => {
     );
     res.json({ card: rows[0] });
   } catch (e) {
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
+    }
     console.error(e);
     res.status(500).json({ error: "INTERNAL_ERROR" });
   }
