@@ -12,12 +12,16 @@ app.use(express.json());
 
 // CORS restrito à origem do seu frontend
 app.use((req, res, next) => {
-  const origin = 'http://192.168.0.18:3000';
-  res.setHeader('Access-Control-Allow-Origin', origin);
-  res.setHeader('Vary', 'Origin');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  const originEnv = process.env.FRONTEND_ORIGIN;
+  const origin =
+    originEnv && (originEnv !== "*" || process.env.NODE_ENV !== "production")
+      ? originEnv
+      : "http://localhost:3000";
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
 

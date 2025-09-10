@@ -19,6 +19,7 @@ postgres-data/
 .env
 .env.local
 .env.*.local
+!apps/api/.env
 
 # Logs
 *.log
