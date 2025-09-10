@@ -28,3 +28,21 @@ export async function getMe() {
 export async function getCards() {
   return apiFetch('/cards');
 }
+
+export async function getAccounts() {
+  return apiFetch('/accounts');
+}
+
+export async function createAccount(data) {
+  return apiFetch('/accounts', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function createCard(data) {
+  return apiFetch('/cards', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
