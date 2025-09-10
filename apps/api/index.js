@@ -5,6 +5,7 @@ import jwt from "jsonwebtoken";
 import pkg from "pg";
 import Pluggy from "pluggy-sdk";
 import { z } from "zod";
+import rateLimit from "express-rate-limit";
 
 dotenv.config();
 const { Pool } = pkg;
@@ -17,6 +18,12 @@ const pluggy = new Pluggy({
 
 const app = express();
 app.use(express.json());
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  handler: (_req, res) => res.status(429).json({ error: "Too Many Requests" }),
+});
 
 // CORS restrito à origem do seu frontend
 app.use((req, res, next) => {
@@ -126,7 +133,7 @@ app.get("/", (req, res) => {
 });
 
 // Registro
-app.post("/auth/register", async (req, res) => {
+app.post("/auth/register", authLimiter, async (req, res) => {
   try {
     const { name, email, password } = await RegisterSchema.parseAsync(req.body);
     const hash = await bcrypt.hash(password, 10);
@@ -150,7 +157,7 @@ app.post("/auth/register", async (req, res) => {
 });
 
 // Login
-app.post("/auth/login", async (req, res) => {
+app.post("/auth/login", authLimiter, async (req, res) => {
   try {
     const { email, password } = await LoginSchema.parseAsync(req.body);
     const { rows } = await pool.query("SELECT * FROM users WHERE email = $1", [email.toLowerCase()]);
