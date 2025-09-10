@@ -76,6 +76,10 @@ const CardSchema = z.object({
   limit: z.number(),
 });
 
+const PluggyItemSchema = z.object({
+  itemId: z.string(),
+});
+
 // Cria extensão e tabela users se não existirem
 async function ensureSchema() {
   try { await pool.query('CREATE EXTENSION IF NOT EXISTS "pgcrypto";'); } catch (_) {}
@@ -109,6 +113,25 @@ async function ensureSchema() {
       expiration TEXT NOT NULL,
       cvc BYTEA NOT NULL,
       card_limit NUMERIC NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS pluggy_connectors (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS pluggy_items (
+      id TEXT PRIMARY KEY,
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      connector_id INTEGER REFERENCES pluggy_connectors(id),
+      status TEXT NOT NULL,
+      error TEXT,
+      last_sync TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
@@ -377,6 +400,117 @@ app.delete("/cards/:id", authMiddleware, async (req, res) => {
   );
   if (result.rowCount === 0) return res.status(404).json({ error: "NOT_FOUND" });
   res.status(204).send();
+});
+
+// Pluggy routes
+app.post("/pluggy/link-token", authMiddleware, async (req, res) => {
+  try {
+    const { accessToken } = await pluggy.createConnectToken(undefined, {
+      clientUserId: req.user.sub,
+    });
+    res.json({ linkToken: accessToken });
+  } catch (e) {
+    logger.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+app.post("/pluggy/items", authMiddleware, async (req, res) => {
+  try {
+    const { itemId } = await PluggyItemSchema.parseAsync(req.body);
+    const item = await pluggy.fetchItem(itemId);
+    await pool.query(
+      `INSERT INTO pluggy_connectors (id, name)
+         VALUES ($1,$2)
+         ON CONFLICT(id) DO UPDATE SET name = EXCLUDED.name`,
+      [item.connector.id, item.connector.name]
+    );
+    await pool.query(
+      `INSERT INTO pluggy_items (id, user_id, connector_id, status, error, last_sync)
+         VALUES ($1,$2,$3,$4,$5,NOW())
+         ON CONFLICT(id) DO UPDATE SET user_id = EXCLUDED.user_id, connector_id = EXCLUDED.connector_id, status = EXCLUDED.status, error = EXCLUDED.error, last_sync = NOW()`,
+      [
+        item.id,
+        req.user.sub,
+        item.connector.id,
+        item.status,
+        item.error ? item.error.message : null,
+      ]
+    );
+    res
+      .status(201)
+      .json({
+        item: {
+          id: item.id,
+          connector: item.connector.name,
+          status: item.status,
+          error: item.error ? item.error.message : null,
+        },
+      });
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
+    }
+    logger.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+app.get("/pluggy/items", authMiddleware, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT i.id, c.name AS connector, i.status, i.error
+       FROM pluggy_items i
+       JOIN pluggy_connectors c ON c.id = i.connector_id
+       WHERE i.user_id = $1
+       ORDER BY i.created_at DESC`,
+    [req.user.sub]
+  );
+  res.json({ items: rows });
+});
+
+app.post("/pluggy/items/:id/sync", authMiddleware, async (req, res) => {
+  try {
+    await pluggy.updateItem(req.params.id);
+    await pool.query(
+      `UPDATE pluggy_items SET status = $1, last_sync = NOW() WHERE id = $2 AND user_id = $3`,
+      ["UPDATING", req.params.id, req.user.sub]
+    );
+    res.status(202).json({ status: "SYNCING" });
+  } catch (e) {
+    logger.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+app.post("/pluggy/webhook", async (req, res) => {
+  const { itemId } = req.body || {};
+  if (!itemId) return res.status(400).json({ error: "INVALID_BODY" });
+  try {
+    const item = await pluggy.fetchItem(itemId);
+    if (!item.clientUserId) return res.status(200).json({});
+    await pool.query(
+      `INSERT INTO pluggy_connectors (id, name)
+         VALUES ($1,$2)
+         ON CONFLICT(id) DO UPDATE SET name = EXCLUDED.name`,
+      [item.connector.id, item.connector.name]
+    );
+    await pool.query(
+      `INSERT INTO pluggy_items (id, user_id, connector_id, status, error, last_sync)
+         VALUES ($1,$2,$3,$4,$5,NOW())
+         ON CONFLICT(id) DO UPDATE SET user_id = EXCLUDED.user_id, connector_id = EXCLUDED.connector_id, status = EXCLUDED.status, error = EXCLUDED.error, last_sync = NOW()`,
+      [
+        item.id,
+        item.clientUserId,
+        item.connector.id,
+        item.status,
+        item.error ? item.error.message : null,
+      ]
+    );
+    res.json({});
+  } catch (e) {
+    logger.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
 });
 
 const PORT = process.env.PORT || 4000;
