@@ -5,6 +5,7 @@
   "main": "apps/api/index.js",
   "scripts": {
     "start": "node apps/api/index.js"
+
   },
   "author": "Ramon Miranda",
   "license": "ISC",

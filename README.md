@@ -1,6 +1,7 @@
 # finance-app
 Aplicação para gestão de finanças.
 
+
 ## Estrutura
 
 O projeto utiliza uma abordagem de monorepo com aplicações em `apps/`.
