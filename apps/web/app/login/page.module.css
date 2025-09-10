@@ -1,0 +1,48 @@
+.main {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+}
+
+.form {
+  width: 380px;
+  padding: var(--space-lg);
+  border-radius: 20px;
+  background: linear-gradient(180deg, var(--color-surface-start), var(--color-surface-end));
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+}
+
+.title {
+  margin-top: 0;
+}
+
+.input {
+  width: 100%;
+  padding: var(--space-xs);
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  margin-bottom: var(--space-sm);
+}
+
+.button {
+  width: 100%;
+  padding: var(--space-sm);
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  background: var(--color-primary);
+  color: white;
+  font-weight: 600;
+}
+
+.message {
+  margin-top: var(--space-sm);
+  font-size: 13px;
+  min-height: 20px;
+}
+
+.signup {
+  margin-top: var(--space-sm);
+  font-size: 13px;
+}
