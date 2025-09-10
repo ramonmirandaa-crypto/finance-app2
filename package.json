@@ -4,7 +4,10 @@
   "description": "Aplicação de finanças pessoais para Ramon Miranda.",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "test:api": "npm --prefix apps/api test",
+    "test:web": "npm --prefix apps/web test",
+    "test": "npm run test:api && npm run test:web"
   },
   "author": "Ramon Miranda",
   "license": "ISC",
