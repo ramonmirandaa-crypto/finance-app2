@@ -6,8 +6,11 @@ import pkg from "pg";
 import Pluggy from "pluggy-sdk";
 import { z } from "zod";
 import rateLimit from "express-rate-limit";
+import logger from "./logger.js";
+import { createRequire } from "module";
 
 dotenv.config();
+const require = createRequire(import.meta.url);
 const { Pool } = pkg;
 
 const pluggy = new Pluggy({
@@ -18,6 +21,7 @@ const pluggy = new Pluggy({
 
 const app = express();
 app.use(express.json());
+app.use(require('pino-http')({ logger }));
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -151,7 +155,7 @@ app.post("/auth/register", authLimiter, async (req, res) => {
     if (String(e).includes("duplicate key")) {
       return res.status(409).json({ error: "EMAIL_ALREADY_EXISTS" });
     }
-    console.error(e);
+    logger.error(e);
     res.status(500).json({ error: "INTERNAL_ERROR" });
   }
 });
@@ -171,7 +175,7 @@ app.post("/auth/login", authLimiter, async (req, res) => {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
     }
-    console.error(e);
+    logger.error(e);
     res.status(500).json({ error: "INTERNAL_ERROR" });
   }
 });
@@ -217,7 +221,7 @@ app.post("/accounts", authMiddleware, async (req, res) => {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
     }
-    console.error(e);
+    logger.error(e);
     res.status(500).json({ error: "INTERNAL_ERROR" });
   }
 });
@@ -264,7 +268,7 @@ app.put("/accounts/:id", authMiddleware, async (req, res) => {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
     }
-    console.error(e);
+    logger.error(e);
     res.status(500).json({ error: "INTERNAL_ERROR" });
   }
 });
@@ -314,7 +318,7 @@ app.post("/cards", authMiddleware, async (req, res) => {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
     }
-    console.error(e);
+    logger.error(e);
     res.status(500).json({ error: "INTERNAL_ERROR" });
   }
 });
@@ -361,7 +365,7 @@ app.put("/cards/:id", authMiddleware, async (req, res) => {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
     }
-    console.error(e);
+    logger.error(e);
     res.status(500).json({ error: "INTERNAL_ERROR" });
   }
 });
@@ -377,5 +381,5 @@ app.delete("/cards/:id", authMiddleware, async (req, res) => {
 
 const PORT = process.env.PORT || 4000;
 ensureSchema().then(() => {
-  app.listen(PORT, () => console.log(`API online na porta ${PORT}`));
+  app.listen(PORT, () => logger.info(`API online na porta ${PORT}`));
 });
