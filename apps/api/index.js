@@ -2,10 +2,25 @@ import express from "express";
 import dotenv from "dotenv";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import pkg from "pg";
+import { randomUUID } from "node:crypto";
 
 dotenv.config();
-const { Pool } = pkg;
+
+let Pool;
+if (process.env.NODE_ENV === "test") {
+  const { newDb } = await import("pg-mem");
+  const db = newDb();
+  db.public.registerFunction({
+    name: "gen_random_uuid",
+    returns: "uuid",
+    implementation: () => randomUUID(),
+  });
+  const pg = db.adapters.createPg();
+  Pool = pg.Pool;
+} else {
+  const pkg = await import("pg");
+  Pool = pkg.Pool;
+}
 
 const app = express();
 app.use(express.json());
@@ -114,7 +129,11 @@ app.get("/me", authMiddleware, async (req, res) => {
   res.json({ user: rows[0] || null });
 });
 
-const PORT = process.env.PORT || 4000;
-ensureSchema().then(() => {
-  app.listen(PORT, () => console.log(`API online na porta ${PORT}`));
-});
+if (process.env.NODE_ENV !== "test") {
+  const PORT = process.env.PORT || 4000;
+  ensureSchema().then(() => {
+    app.listen(PORT, () => console.log(`API online na porta ${PORT}`));
+  });
+}
+
+export { app, ensureSchema, pool };
