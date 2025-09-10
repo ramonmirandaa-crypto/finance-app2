@@ -3,9 +3,15 @@ import dotenv from "dotenv";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import pkg from "pg";
+import Pluggy from "pluggy-js";
 
 dotenv.config();
 const { Pool } = pkg;
+
+const pluggy = new Pluggy({
+  clientId: process.env.PLUGGY_CLIENT_ID || "",
+  clientSecret: process.env.PLUGGY_CLIENT_SECRET || "",
+});
 
 const app = express();
 app.use(express.json());
@@ -66,6 +72,24 @@ async function ensureSchema() {
       cvc BYTEA NOT NULL,
       card_limit NUMERIC NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS pluggy_connectors (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS pluggy_items (
+      id TEXT PRIMARY KEY,
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      connector_id INTEGER REFERENCES pluggy_connectors(id),
+      status TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
 }
@@ -331,6 +355,86 @@ app.delete("/cards/:id", authMiddleware, async (req, res) => {
   );
   if (result.rowCount === 0) return res.status(404).json({ error: "NOT_FOUND" });
   res.status(204).send();
+});
+
+// Open Finance / Pluggy endpoints
+app.get("/pluggy/connectors", authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      "SELECT id, name FROM pluggy_connectors ORDER BY id"
+    );
+    if (rows.length === 0) {
+      const { results } = await pluggy.fetchConnectors();
+      for (const c of results) {
+        await pool.query(
+          "INSERT INTO pluggy_connectors (id, name) VALUES ($1,$2) ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name",
+          [c.id, c.name]
+        );
+      }
+      return res.json({ connectors: results });
+    }
+    res.json({ connectors: rows });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+app.post("/pluggy/link-token", authMiddleware, async (req, res) => {
+  try {
+    const { accessToken } = await pluggy.createConnectToken(undefined, {
+      clientUserId: req.user.sub,
+      webhookUrl: process.env.PLUGGY_WEBHOOK_URL,
+    });
+    res.json({ accessToken });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+app.get("/pluggy/items", authMiddleware, async (req, res) => {
+  const { rows } = await pool.query(
+    "SELECT id, connector_id, status FROM pluggy_items WHERE user_id = $1 ORDER BY created_at DESC",
+    [req.user.sub]
+  );
+  res.json({ items: rows });
+});
+
+app.post("/pluggy/items/:id/sync", authMiddleware, async (req, res) => {
+  try {
+    const item = await pluggy.fetchItem(req.params.id);
+    await pool.query(
+      "UPDATE pluggy_items SET status = $2, connector_id = $3, updated_at = NOW() WHERE id = $1 AND user_id = $4",
+      [item.id, item.status, item.connector.id, req.user.sub]
+    );
+    res.json({ item });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+app.post("/pluggy/webhook", async (req, res) => {
+  try {
+    const { item } = req.body || {};
+    if (item) {
+      await pool.query(
+        "INSERT INTO pluggy_connectors (id, name) VALUES ($1,$2) ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name",
+        [item.connector.id, item.connector.name]
+      );
+      await pool.query(
+        `INSERT INTO pluggy_items (id, user_id, connector_id, status)
+         VALUES ($1,$2,$3,$4)
+         ON CONFLICT (id) DO UPDATE SET status=EXCLUDED.status, connector_id=EXCLUDED.connector_id, updated_at=NOW()`,
+        [item.id, item.clientUserId, item.connector.id, item.status]
+      );
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
 });
 
 const PORT = process.env.PORT || 4000;
