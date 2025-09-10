@@ -4,7 +4,8 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "NODE_ENV=test node --test"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -13,5 +14,9 @@
     "jsonwebtoken": "^9.0.2",
     "knex": "^3.1.0",
     "pg": "^8.11.3"
+  },
+  "devDependencies": {
+    "pg-mem": "^3.0.5",
+    "supertest": "^6.3.3"
   }
 }
