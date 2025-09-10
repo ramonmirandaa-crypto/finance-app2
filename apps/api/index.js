@@ -12,7 +12,7 @@ app.use(express.json());
 
 // CORS restrito à origem do seu frontend
 app.use((req, res, next) => {
-  const origin = 'http://192.168.0.18:3000';
+  const origin = process.env.ALLOWED_ORIGIN || 'http://localhost:3000';
   res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');

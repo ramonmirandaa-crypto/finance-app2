@@ -17,6 +17,8 @@ services:
   api:
     build: ./apps/api
     env_file: ./apps/api/.env
+    environment:
+      - ALLOWED_ORIGIN=${ALLOWED_ORIGIN:-http://localhost:3000}
     ports:
       - "4000:4000"
     depends_on:
