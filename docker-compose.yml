@@ -1,55 +1,64 @@
 version: '3.8'
 
 services:
+  # 1. Contêiner de inicialização
+  init:
+    image: alpine/git:latest
+    # Passa a variável de ambiente para dentro do contêiner
+    environment:
+      - GIT_TOKEN=${GIT_TOKEN}
+    # O comando agora usa a variável de ambiente $GIT_TOKEN
+    # ATENÇÃO: Substitua <SEU_USUARIO> pelo seu nome de usuário
+    command: >
+      sh -c "git clone https://ramonmirandaa-crypto:${GIT_TOKEN}@github.com/ramonmirandaa-crypto/finance-app.git /source && chmod -R 777 /source"
+    volumes:
+      - source-code:/source
+
+  # 2. Contêiner da Aplicação Backend
   backend:
     image: node:18.20.2-alpine
     container_name: finance-app-backend
     restart: unless-stopped
     working_dir: /usr/src/app
-    
-    # Comando explícito para iniciar a aplicação, que se provou funcional.
     command: ["node", "src/server.js"]
-    
     volumes:
-      # Mapeia a pasta do código clonado no servidor para a pasta de trabalho do contêiner.
-      - /mnt/dados/finance-app/finance-app:/usr/src/app
-      
+      - source-code:/usr/src/app
     ports:
       - "3333:3333"
-      
     environment:
       - DATABASE_HOST=db
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
       - JWT_SECRET=${JWT_SECRET}
-      
     depends_on:
       db:
         condition: service_healthy
-        
+      init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:3333/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
 
+  # 3. Contêiner do Banco de Dados
   db:
     image: postgres:15-alpine
     container_name: finance-app-postgres
     restart: unless-stopped
-    
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 5
-      
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
-      
     volumes:
-      # Mapeia a pasta de dados persistentes no servidor para a pasta de dados do PostgreSQL.
       - /mnt/dados/finance-app/postgres-data:/var/lib/postgresql/data
+
+# 4. Define o volume nomeado
+volumes:
+  source-code:
