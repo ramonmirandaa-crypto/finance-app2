@@ -11,10 +11,13 @@ import logger from "./logger.js";
 import { createRequire } from "module";
 import crypto from "crypto";
 import speakeasy from "speakeasy";
+import knex from "knex";
+import knexConfig from "./knexfile.js";
 
 dotenv.config();
 const require = createRequire(import.meta.url);
 const { Pool } = pkg;
+const knexClient = knex(knexConfig);
 
 const pluggy = new Pluggy({
   clientId: process.env.PLUGGY_CLIENT_ID,
@@ -125,118 +128,6 @@ const PluggyItemSchema = z.object({
   itemId: z.string(),
 });
 
-// Cria extensão e tabela users se não existirem
-async function ensureSchema() {
-  try { await pool.query('CREATE EXTENSION IF NOT EXISTS "pgcrypto";'); } catch (_) {}
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS users (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      name TEXT NOT NULL,
-      email TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS accounts (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-      agency TEXT NOT NULL,
-      account_number BYTEA NOT NULL,
-      manager BYTEA,
-      phone BYTEA,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS cards (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-      card_number BYTEA NOT NULL,
-      expiration TEXT NOT NULL,
-      card_limit NUMERIC NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `);
-  await pool.query("ALTER TABLE cards DROP COLUMN IF EXISTS cvc;");
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS pluggy_connectors (
-      id INTEGER PRIMARY KEY,
-      name TEXT NOT NULL
-    );
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS pluggy_items (
-      id TEXT PRIMARY KEY,
-      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-      connector_id INTEGER REFERENCES pluggy_connectors(id),
-      status TEXT NOT NULL,
-      error TEXT,
-      last_sync TIMESTAMPTZ,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS categories (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-      name TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS budgets (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-      category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
-      amount NUMERIC NOT NULL,
-      currency TEXT NOT NULL,
-      pluggy_transaction_id TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS goals (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-      name TEXT NOT NULL,
-      target NUMERIC NOT NULL,
-      currency TEXT NOT NULL,
-      deadline DATE,
-      pluggy_transaction_id TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS investments (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-      description TEXT NOT NULL,
-      amount NUMERIC NOT NULL,
-      currency TEXT NOT NULL,
-      pluggy_transaction_id TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS reports (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-      name TEXT NOT NULL,
-      data JSONB,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `);
-}
 
 function signToken(user) {
   const payload = { sub: user.id, name: user.name, email: user.email };
@@ -806,10 +697,10 @@ const PORT = process.env.PORT || 4000;
 
 // Evita iniciar o servidor automaticamente durante os testes
 if (process.env.NODE_ENV !== "test") {
-  ensureSchema().then(() => {
+  knexClient.migrate.latest().then(() => {
     app.listen(PORT, () => logger.info(`API online na porta ${PORT}`));
-  });
+  }).finally(() => knexClient.destroy());
 }
 
-export { app, pool, ensureSchema };
+export { app, pool };
 export default app;
