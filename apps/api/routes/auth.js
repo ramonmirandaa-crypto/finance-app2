@@ -55,6 +55,7 @@ export default function createAuthRoutes({ pool, authMiddleware, ENC_KEY }) {
         sameSite: 'lax',
       });
       res.cookie('csrfToken', csrfToken, {
+        httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
       });
@@ -95,6 +96,7 @@ export default function createAuthRoutes({ pool, authMiddleware, ENC_KEY }) {
         sameSite: 'lax',
       });
       res.cookie('csrfToken', csrfToken, {
+        httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
       });
@@ -109,8 +111,16 @@ export default function createAuthRoutes({ pool, authMiddleware, ENC_KEY }) {
   });
 
   router.post('/logout', (_req, res) => {
-    res.clearCookie('token');
-    res.clearCookie('csrfToken');
+    res.clearCookie('token', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+    });
+    res.clearCookie('csrfToken', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+    });
     res.sendStatus(204);
   });
 
