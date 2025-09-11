@@ -12,10 +12,14 @@ import { createRequire } from "module";
 import crypto from "crypto";
 import speakeasy from "speakeasy";
 import { getRate } from "./exchange.js";
+import knex from "knex";
+import knexConfig from "./knexfile.js";
+import QRCode from "qrcode";
 
 dotenv.config();
 const require = createRequire(import.meta.url);
 const { Pool } = pkg;
+const knexClient = knex(knexConfig);
 
 const pluggy = new Pluggy({
   clientId: process.env.PLUGGY_CLIENT_ID,
@@ -72,6 +76,7 @@ const RegisterSchema = z.object({
 const LoginSchema = z.object({
   email: z.string().email(),
   password: z.string(),
+  totp: z.string().length(6).optional(),
 });
 
 const TotpSchema = z.object({
@@ -139,6 +144,9 @@ async function ensureSchema() {
     );
   `);
 
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS twofa_secret TEXT;");
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS twofa_enabled BOOLEAN NOT NULL DEFAULT FALSE;");
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS accounts (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -178,6 +186,35 @@ async function ensureSchema() {
       status TEXT NOT NULL,
       error TEXT,
       last_sync TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS pluggy_accounts (
+      id TEXT PRIMARY KEY,
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      item_id TEXT REFERENCES pluggy_items(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      type TEXT,
+      number TEXT,
+      agency TEXT,
+      balance NUMERIC,
+      currency TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS pluggy_transactions (
+      id TEXT PRIMARY KEY,
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      item_id TEXT REFERENCES pluggy_items(id) ON DELETE CASCADE,
+      account_id TEXT REFERENCES pluggy_accounts(id) ON DELETE CASCADE,
+      description TEXT,
+      amount NUMERIC,
+      currency TEXT,
+      date DATE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
@@ -244,27 +281,36 @@ function signToken(user) {
   return jwt.sign(payload, process.env.JWT_SECRET || "devsecret", { expiresIn: "7d" });
 }
 
-function getTokenFromCookies(req) {
-  const auth = req.headers.authorization || "";
-  if (auth.startsWith("Bearer ")) return auth.slice(7);
+function getCookie(req, name) {
   const cookie = req.headers.cookie || "";
   const match = cookie
     .split(";")
     .map((c) => c.trim())
-    .find((c) => c.startsWith("token="));
-  return match ? match.slice(6) : null;
+    .find((c) => c.startsWith(`${name}=`));
+  return match ? match.slice(name.length + 1) : null;
+}
+
+function getToken(req) {
+  const auth = req.headers.authorization || "";
+  if (auth.startsWith("Bearer ")) return auth.slice(7);
+  return getCookie(req, "token");
 }
 
 function authMiddleware(req, res, next) {
-  const token = getTokenFromCookies(req);
+  const token = getToken(req);
   if (!token) return res.status(401).json({ error: "TOKEN_MISSING" });
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || "devsecret");
     req.user = decoded;
-    next();
   } catch {
     return res.status(401).json({ error: "TOKEN_INVALID" });
   }
+  const csrfCookie = getCookie(req, "csrfToken");
+  const csrfHeader = req.get("x-csrf-token");
+  if (!csrfCookie || !csrfHeader || csrfCookie !== csrfHeader) {
+    return res.status(403).json({ error: "CSRF_INVALID" });
+  }
+  next();
 }
 
 app.get("/", (req, res) => {
@@ -294,7 +340,9 @@ app.post("/auth/register", authLimiter, async (req, res) => {
     );
     const user = rows[0];
     const token = signToken(user);
-    res.cookie('token', token, { httpOnly: true, secure: true, sameSite: 'lax' });
+    const csrfToken = crypto.randomBytes(20).toString("hex");
+    res.cookie("token", token, { httpOnly: true, secure: true, sameSite: "lax" });
+    res.cookie("csrfToken", csrfToken, { secure: true, sameSite: "lax" });
     res.status(201).json({ user, token });
   } catch (e) {
     if (e instanceof z.ZodError) {
@@ -311,15 +359,61 @@ app.post("/auth/register", authLimiter, async (req, res) => {
 // Login
 app.post("/auth/login", authLimiter, async (req, res) => {
   try {
-    const { email, password } = await LoginSchema.parseAsync(req.body);
+    const { email, password, totp } = await LoginSchema.parseAsync(req.body);
     const { rows } = await pool.query("SELECT * FROM users WHERE email = $1", [email.toLowerCase()]);
     const user = rows[0];
     if (!user) return res.status(401).json({ error: "INVALID_CREDENTIALS" });
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) return res.status(401).json({ error: "INVALID_CREDENTIALS" });
+    if (user.twofa_enabled) {
+      if (!totp) return res.status(401).json({ error: "TOTP_REQUIRED" });
+      const validTotp = speakeasy.totp.verify({ secret: user.twofa_secret, encoding: "base32", token: totp });
+      if (!validTotp) return res.status(401).json({ error: "INVALID_TOTP" });
+    }
     const token = signToken(user);
-    res.cookie('token', token, { httpOnly: true, secure: true, sameSite: 'lax' });
+    const csrfToken = crypto.randomBytes(20).toString("hex");
+    res.cookie("token", token, { httpOnly: true, secure: true, sameSite: "lax" });
+    res.cookie("csrfToken", csrfToken, { secure: true, sameSite: "lax" });
     res.json({ user: { id: user.id, name: user.name, email: user.email }, token });
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
+    }
+    logger.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+app.post("/auth/2fa/setup", authMiddleware, async (req, res) => {
+  try {
+    const secret = speakeasy.generateSecret({ name: "Finance App" });
+    await pool.query(
+      "UPDATE users SET twofa_secret = $1, twofa_enabled = FALSE WHERE id = $2",
+      [secret.base32, req.user.sub]
+    );
+    const qrcode = await QRCode.toDataURL(secret.otpauth_url);
+    res.json({ qrcode });
+  } catch (e) {
+    logger.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+app.post("/auth/2fa/verify", authMiddleware, async (req, res) => {
+  try {
+    const { token } = await TotpSchema.parseAsync(req.body);
+    const { rows } = await pool.query(
+      "SELECT twofa_secret FROM users WHERE id = $1",
+      [req.user.sub]
+    );
+    const secret = rows[0]?.twofa_secret;
+    const ok = speakeasy.totp.verify({ secret, encoding: "base32", token });
+    if (!ok) return res.status(400).json({ error: "INVALID_TOTP" });
+    await pool.query(
+      "UPDATE users SET twofa_enabled = TRUE WHERE id = $1",
+      [req.user.sub]
+    );
+    res.json({});
   } catch (e) {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
@@ -725,6 +819,46 @@ app.post("/pluggy/items", authMiddleware, async (req, res) => {
         item.error ? item.error.message : null,
       ]
     );
+    const accountsResp = await pluggy.fetchAccounts(item.id);
+    const accounts = accountsResp.results || accountsResp;
+    for (const acc of accounts) {
+      const balance = acc.balance && typeof acc.balance === 'object' ? acc.balance.current : acc.balance;
+      await pool.query(
+        `INSERT INTO pluggy_accounts (id, user_id, item_id, name, type, number, agency, balance, currency)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+           ON CONFLICT(id) DO UPDATE SET name = EXCLUDED.name, type = EXCLUDED.type, number = EXCLUDED.number, agency = EXCLUDED.agency, balance = EXCLUDED.balance, currency = EXCLUDED.currency`,
+        [
+          acc.id,
+          req.user.sub,
+          item.id,
+          acc.name,
+          acc.type,
+          acc.number || null,
+          acc.branchNumber || acc.agency || null,
+          balance,
+          acc.currencyCode || acc.currency || null,
+        ]
+      );
+    }
+    const txResp = await pluggy.fetchTransactions(item.id);
+    const txs = txResp.results || txResp;
+    for (const tx of txs) {
+      await pool.query(
+        `INSERT INTO pluggy_transactions (id, user_id, item_id, account_id, description, amount, currency, date)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+           ON CONFLICT(id) DO UPDATE SET account_id = EXCLUDED.account_id, description = EXCLUDED.description, amount = EXCLUDED.amount, currency = EXCLUDED.currency, date = EXCLUDED.date`,
+        [
+          tx.id,
+          req.user.sub,
+          item.id,
+          tx.accountId,
+          tx.description,
+          tx.amount,
+          tx.currencyCode || tx.currency,
+          tx.date,
+        ]
+      );
+    }
     res
       .status(201)
       .json({
@@ -756,14 +890,77 @@ app.get("/pluggy/items", authMiddleware, async (req, res) => {
   res.json({ items: rows });
 });
 
+app.get("/pluggy/accounts", authMiddleware, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id, item_id AS "itemId", name, type, number, agency, balance, currency
+       FROM pluggy_accounts
+       WHERE user_id = $1
+       ORDER BY name`,
+    [req.user.sub]
+  );
+  res.json({ accounts: rows });
+});
+
+app.get("/pluggy/transactions", authMiddleware, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id, item_id AS "itemId", account_id AS "accountId", description, amount, currency, date
+       FROM pluggy_transactions
+       WHERE user_id = $1
+       ORDER BY date DESC`,
+    [req.user.sub]
+  );
+  res.json({ transactions: rows });
+});
+
 app.post("/pluggy/items/:id/sync", authMiddleware, async (req, res) => {
   try {
     await pluggy.updateItem(req.params.id);
+    const item = await pluggy.fetchItem(req.params.id);
+    const accountsResp = await pluggy.fetchAccounts(req.params.id);
+    const accounts = accountsResp.results || accountsResp;
+    for (const acc of accounts) {
+      const balance = acc.balance && typeof acc.balance === 'object' ? acc.balance.current : acc.balance;
+      await pool.query(
+        `INSERT INTO pluggy_accounts (id, user_id, item_id, name, type, number, agency, balance, currency)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+           ON CONFLICT(id) DO UPDATE SET name = EXCLUDED.name, type = EXCLUDED.type, number = EXCLUDED.number, agency = EXCLUDED.agency, balance = EXCLUDED.balance, currency = EXCLUDED.currency`,
+        [
+          acc.id,
+          req.user.sub,
+          req.params.id,
+          acc.name,
+          acc.type,
+          acc.number || null,
+          acc.branchNumber || acc.agency || null,
+          balance,
+          acc.currencyCode || acc.currency || null,
+        ]
+      );
+    }
+    const txResp = await pluggy.fetchTransactions(req.params.id);
+    const txs = txResp.results || txResp;
+    for (const tx of txs) {
+      await pool.query(
+        `INSERT INTO pluggy_transactions (id, user_id, item_id, account_id, description, amount, currency, date)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+           ON CONFLICT(id) DO UPDATE SET account_id = EXCLUDED.account_id, description = EXCLUDED.description, amount = EXCLUDED.amount, currency = EXCLUDED.currency, date = EXCLUDED.date`,
+        [
+          tx.id,
+          req.user.sub,
+          req.params.id,
+          tx.accountId,
+          tx.description,
+          tx.amount,
+          tx.currencyCode || tx.currency,
+          tx.date,
+        ]
+      );
+    }
     await pool.query(
-      `UPDATE pluggy_items SET status = $1, last_sync = NOW() WHERE id = $2 AND user_id = $3`,
-      ["UPDATING", req.params.id, req.user.sub]
+      `UPDATE pluggy_items SET status = $1, error = $2, last_sync = NOW() WHERE id = $3 AND user_id = $4`,
+      [item.status, item.error ? item.error.message : null, req.params.id, req.user.sub]
     );
-    res.status(202).json({ status: "SYNCING" });
+    res.status(200).json({ status: item.status });
   } catch (e) {
     logger.error(e);
     res.status(500).json({ error: "INTERNAL_ERROR" });
@@ -819,10 +1016,10 @@ const PORT = process.env.PORT || 4000;
 
 // Evita iniciar o servidor automaticamente durante os testes
 if (process.env.NODE_ENV !== "test") {
-  ensureSchema().then(() => {
+  knexClient.migrate.latest().then(() => {
     app.listen(PORT, () => logger.info(`API online na porta ${PORT}`));
-  });
+  }).finally(() => knexClient.destroy());
 }
 
-export { app, pool, ensureSchema };
+export { app, pool };
 export default app;

@@ -27,6 +27,7 @@ export default function Sidebar() {
       <NavLink href="/analise" label="Análise" />
       <NavLink href="/categorias" label="Categorias" />
       <NavLink href="/integracoes" label="Integrações" />
+      <NavLink href="/configuracoes" label="Configurações" />
     </aside>
   );
 }
