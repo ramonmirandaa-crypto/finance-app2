@@ -26,6 +26,7 @@ cp apps/web/.env.example apps/web/.env
 | API | DB_NAME | Nome do banco |
 | API | ALLOWED_ORIGIN | Origem permitida para requisições do frontend |
 | API | DATA_ENCRYPTION_KEY | Chave de criptografia simétrica dos dados |
+| API | JWT_SECRET | Chave secreta usada para assinar tokens JWT |
 | API | PLUGGY_CLIENT_ID | Client ID do Pluggy |
 | API | PLUGGY_CLIENT_SECRET | Client Secret do Pluggy |
 | API | PLUGGY_BASE_URL | URL base da API do Pluggy |
