@@ -705,7 +705,10 @@ app.post("/pluggy/items", authMiddleware, async (req, res) => {
       const balance = acc.balance && typeof acc.balance === 'object' ? acc.balance.current : acc.balance;
       await pool.query(
         `INSERT INTO pluggy_accounts (id, user_id, item_id, name, type, number, agency, balance, currency)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+           VALUES ($1,$2,$3,$4,$5,
+                   pgp_sym_encrypt($6, $10, 'cipher-algo=aes256'),
+                   pgp_sym_encrypt($7, $10, 'cipher-algo=aes256'),
+                   $8,$9)
            ON CONFLICT(id) DO UPDATE SET name = EXCLUDED.name, type = EXCLUDED.type, number = EXCLUDED.number, agency = EXCLUDED.agency, balance = EXCLUDED.balance, currency = EXCLUDED.currency`,
         [
           acc.id,
@@ -717,6 +720,7 @@ app.post("/pluggy/items", authMiddleware, async (req, res) => {
           acc.branchNumber || acc.agency || null,
           balance,
           acc.currencyCode || acc.currency || null,
+          ENC_KEY,
         ]
       );
     }
@@ -772,11 +776,14 @@ app.get("/pluggy/items", authMiddleware, async (req, res) => {
 
 app.get("/pluggy/accounts", authMiddleware, async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT id, item_id AS "itemId", name, type, number, agency, balance, currency
+    `SELECT id, item_id AS "itemId", name, type,
+            pgp_sym_decrypt(number, $2) AS number,
+            pgp_sym_decrypt(agency, $2) AS agency,
+            balance, currency
        FROM pluggy_accounts
        WHERE user_id = $1
        ORDER BY name`,
-    [req.user.sub]
+    [req.user.sub, ENC_KEY]
   );
   res.json({ accounts: rows });
 });
@@ -802,7 +809,10 @@ app.post("/pluggy/items/:id/sync", authMiddleware, async (req, res) => {
       const balance = acc.balance && typeof acc.balance === 'object' ? acc.balance.current : acc.balance;
       await pool.query(
         `INSERT INTO pluggy_accounts (id, user_id, item_id, name, type, number, agency, balance, currency)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+           VALUES ($1,$2,$3,$4,$5,
+                   pgp_sym_encrypt($6, $10, 'cipher-algo=aes256'),
+                   pgp_sym_encrypt($7, $10, 'cipher-algo=aes256'),
+                   $8,$9)
            ON CONFLICT(id) DO UPDATE SET name = EXCLUDED.name, type = EXCLUDED.type, number = EXCLUDED.number, agency = EXCLUDED.agency, balance = EXCLUDED.balance, currency = EXCLUDED.currency`,
         [
           acc.id,
@@ -814,6 +824,7 @@ app.post("/pluggy/items/:id/sync", authMiddleware, async (req, res) => {
           acc.branchNumber || acc.agency || null,
           balance,
           acc.currencyCode || acc.currency || null,
+          ENC_KEY,
         ]
       );
     }
