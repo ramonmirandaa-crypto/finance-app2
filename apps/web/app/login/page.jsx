@@ -22,7 +22,7 @@ export default function LoginPage() {
         method: 'POST',
         body: JSON.stringify(body)
       });
-      auth.save();
+      await auth.getUser(true);
       router.replace('/dashboard');
     } catch (e) {
       if (e?.data?.error === 'TOTP_REQUIRED') {

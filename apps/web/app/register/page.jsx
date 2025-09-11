@@ -19,7 +19,7 @@ export default function RegisterPage() {
         method: 'POST',
         body: JSON.stringify({ name: nome, email, password: senha })
       });
-      auth.save();
+      await auth.getUser(true);
       router.replace('/dashboard');
     } catch (e) {
       setMsg(e?.data?.error || 'Falha no registro');

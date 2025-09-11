@@ -3,9 +3,6 @@ import { getMe } from './api';
 let user = null;
 
 export const auth = {
-  save() {
-    // Token is stored in httpOnly cookie by the server
-  },
   clearLocal() {
     user = null;
   },
