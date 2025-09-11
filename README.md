@@ -23,6 +23,8 @@ npm install helmet
 
 ### Variáveis de ambiente
 
+As variáveis `JWT_SECRET` e `DATA_ENCRYPTION_KEY` são obrigatórias e a API não inicia sem elas.
+
 | Serviço | Variável | Descrição |
 | --- | --- | --- |
 | API | DB_HOST | Host do banco PostgreSQL |
@@ -31,12 +33,12 @@ npm install helmet
 | API | DB_PASSWORD | Senha do usuário |
 | API | DB_NAME | Nome do banco |
 | API | ALLOWED_ORIGIN | Origem permitida para requisições do frontend |
-| API | DATA_ENCRYPTION_KEY | Chave de criptografia simétrica dos dados |
+| API | DATA_ENCRYPTION_KEY | Chave de criptografia simétrica dos dados (obrigatória) |
 | API | PLUGGY_CLIENT_ID | Client ID do Pluggy |
 | API | PLUGGY_CLIENT_SECRET | Client Secret do Pluggy |
 | API | PLUGGY_BASE_URL | URL base da API do Pluggy |
 | API | LOG_LEVEL | Nível de log da API |
-| API | JWT_SECRET | Chave secreta usada na assinatura de tokens JWT para autenticação |
+| API | JWT_SECRET | Chave secreta usada na assinatura de tokens JWT para autenticação (obrigatória) |
 | API | NODE_ENV | Ambiente da aplicação (`development` ou `production`); em `production` os cookies usam `secure` e exigem HTTPS |
 | Web | NEXT_PUBLIC_API_URL | URL base da API consumida pelo frontend |
 | Backup | PGHOST | Host do banco PostgreSQL (padrão `localhost`) |
