@@ -243,3 +243,25 @@ export async function updateRecurring(id, data) {
 export async function deleteRecurring(id) {
   return apiFetch(`/recurrings/${id}`, { method: 'DELETE' });
 }
+
+export async function getSubscriptions() {
+  return apiFetch('/subscriptions');
+}
+
+export async function createSubscription(data) {
+  return apiFetch('/subscriptions', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateSubscription(id, data) {
+  return apiFetch(`/subscriptions/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteSubscription(id) {
+  return apiFetch(`/subscriptions/${id}`, { method: 'DELETE' });
+}

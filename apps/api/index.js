@@ -127,6 +127,15 @@ const RecurringSchema = z.object({
   description: z.string().optional(),
 });
 
+const SubscriptionSchema = z.object({
+  accountId: z.string().uuid(),
+  categoryId: z.string().uuid().optional(),
+  service: z.string(),
+  amount: z.number(),
+  currency: z.string(),
+  nextBillingDate: z.string(),
+});
+
 const BudgetSchema = z.object({
   categoryId: z.string().uuid(),
   amount: z.number(),
@@ -726,6 +735,72 @@ app.put("/recurrings/:id", authMiddleware, async (req, res) => {
 app.delete("/recurrings/:id", authMiddleware, async (req, res) => {
   const result = await pool.query(
     "DELETE FROM recurrings WHERE id = $1 AND user_id = $2",
+    [req.params.id, req.user.sub]
+  );
+  if (result.rowCount === 0) return res.status(404).json({ error: "NOT_FOUND" });
+  res.status(204).send();
+});
+
+// Subscriptions
+app.get("/subscriptions", authMiddleware, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id, account_id AS "accountId", category_id AS "categoryId", service, amount, currency,
+            next_billing_date AS "nextBillingDate"
+       FROM subscriptions
+       WHERE user_id = $1
+       ORDER BY next_billing_date ASC`,
+    [req.user.sub]
+  );
+  res.json({ subscriptions: rows });
+});
+
+app.post("/subscriptions", authMiddleware, async (req, res) => {
+  try {
+    const { accountId, categoryId, service, amount, currency, nextBillingDate } =
+      await SubscriptionSchema.parseAsync(req.body);
+    const { rows } = await pool.query(
+      `INSERT INTO subscriptions (user_id, account_id, category_id, service, amount, currency, next_billing_date)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)
+         RETURNING id, account_id AS "accountId", category_id AS "categoryId", service, amount, currency,
+                   next_billing_date AS "nextBillingDate"`,
+      [req.user.sub, accountId, categoryId, service, amount, currency, nextBillingDate]
+    );
+    res.status(201).json({ subscription: rows[0] });
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
+    }
+    logger.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+app.put("/subscriptions/:id", authMiddleware, async (req, res) => {
+  try {
+    const { accountId, categoryId, service, amount, currency, nextBillingDate } =
+      await SubscriptionSchema.parseAsync(req.body);
+    const { rows } = await pool.query(
+      `UPDATE subscriptions SET account_id = $3, category_id = $4, service = $5, amount = $6, currency = $7,
+              next_billing_date = $8
+         WHERE id = $1 AND user_id = $2
+         RETURNING id, account_id AS "accountId", category_id AS "categoryId", service, amount, currency,
+                   next_billing_date AS "nextBillingDate"`,
+      [req.params.id, req.user.sub, accountId, categoryId, service, amount, currency, nextBillingDate]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: "NOT_FOUND" });
+    res.json({ subscription: rows[0] });
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
+    }
+    logger.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+app.delete("/subscriptions/:id", authMiddleware, async (req, res) => {
+  const result = await pool.query(
+    "DELETE FROM subscriptions WHERE id = $1 AND user_id = $2",
     [req.params.id, req.user.sub]
   );
   if (result.rowCount === 0) return res.status(404).json({ error: "NOT_FOUND" });
