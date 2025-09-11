@@ -291,7 +291,7 @@ app.get("/cards", authMiddleware, async (req, res) => {
   res.json({ cards: rows });
 });
 
-app.post("/cards", authMiddleware, async (req, res) => {
+app.post("/cards", authMiddleware, async (req, res, next) => {
   try {
     const { number, expiration, limit } = await CardSchema.parseAsync(req.body);
     const { rows } = await pool.query(
@@ -311,8 +311,7 @@ app.post("/cards", authMiddleware, async (req, res) => {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
     }
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
+    return next(e);
   }
 });
 
@@ -331,7 +330,7 @@ app.get("/cards/:id", authMiddleware, async (req, res) => {
   res.json({ card });
 });
 
-app.put("/cards/:id", authMiddleware, async (req, res) => {
+app.put("/cards/:id", authMiddleware, async (req, res, next) => {
   try {
     const { number, expiration, limit } = await CardSchema.parseAsync(req.body);
     const result = await pool.query(
@@ -357,8 +356,7 @@ app.put("/cards/:id", authMiddleware, async (req, res) => {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
     }
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
+    return next(e);
   }
 });
 
@@ -380,7 +378,7 @@ app.get("/categories", authMiddleware, async (req, res) => {
   res.json({ categories: rows });
 });
 
-app.post("/categories", authMiddleware, async (req, res) => {
+app.post("/categories", authMiddleware, async (req, res, next) => {
   try {
     const { name } = await CategorySchema.parseAsync(req.body);
     const { rows } = await pool.query(
@@ -392,8 +390,7 @@ app.post("/categories", authMiddleware, async (req, res) => {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
     }
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
+    return next(e);
   }
 });
 
@@ -410,7 +407,7 @@ app.get("/transactions", authMiddleware, async (req, res) => {
   res.json({ transactions: rows });
 });
 
-app.post("/transactions", authMiddleware, async (req, res) => {
+app.post("/transactions", authMiddleware, async (req, res, next) => {
   try {
     const { accountId, categoryId, type, amount, currency, date, description } =
       await TransactionSchema.parseAsync(req.body);
@@ -427,12 +424,11 @@ app.post("/transactions", authMiddleware, async (req, res) => {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
     }
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
+    return next(e);
   }
 });
 
-app.put("/transactions/:id", authMiddleware, async (req, res) => {
+app.put("/transactions/:id", authMiddleware, async (req, res, next) => {
   try {
     const { accountId, categoryId, type, amount, currency, date, description } =
       await TransactionSchema.parseAsync(req.body);
@@ -455,8 +451,7 @@ app.put("/transactions/:id", authMiddleware, async (req, res) => {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
     }
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
+    return next(e);
   }
 });
 
@@ -483,7 +478,7 @@ app.get("/recurrings", authMiddleware, async (req, res) => {
   res.json({ recurrings: rows });
 });
 
-app.post("/recurrings", authMiddleware, async (req, res) => {
+app.post("/recurrings", authMiddleware, async (req, res, next) => {
   try {
     const { accountId, categoryId, type, amount, currency, intervalDays, nextOccurrence, description } =
       await RecurringSchema.parseAsync(req.body);
@@ -500,12 +495,11 @@ app.post("/recurrings", authMiddleware, async (req, res) => {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
     }
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
+    return next(e);
   }
 });
 
-app.put("/recurrings/:id", authMiddleware, async (req, res) => {
+app.put("/recurrings/:id", authMiddleware, async (req, res, next) => {
   try {
     const { accountId, categoryId, type, amount, currency, intervalDays, nextOccurrence, description } =
       await RecurringSchema.parseAsync(req.body);
@@ -525,8 +519,7 @@ app.put("/recurrings/:id", authMiddleware, async (req, res) => {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
     }
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
+    return next(e);
   }
 });
 
@@ -552,7 +545,7 @@ app.get("/scheduled-transactions", authMiddleware, async (req, res) => {
   res.json({ scheduledTransactions: rows });
 });
 
-app.post("/scheduled-transactions", authMiddleware, async (req, res) => {
+app.post("/scheduled-transactions", authMiddleware, async (req, res, next) => {
   try {
     const { accountId, categoryId, type, amount, currency, date, executeAt, description } =
       await ScheduledTransactionSchema.parseAsync(req.body);
@@ -568,8 +561,7 @@ app.post("/scheduled-transactions", authMiddleware, async (req, res) => {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
     }
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
+    return next(e);
   }
 });
 
@@ -595,7 +587,7 @@ app.get("/subscriptions", authMiddleware, async (req, res) => {
   res.json({ subscriptions: rows });
 });
 
-app.post("/subscriptions", authMiddleware, async (req, res) => {
+app.post("/subscriptions", authMiddleware, async (req, res, next) => {
   try {
     const { accountId, categoryId, service, amount, currency, nextBillingDate } =
       await SubscriptionSchema.parseAsync(req.body);
@@ -611,12 +603,11 @@ app.post("/subscriptions", authMiddleware, async (req, res) => {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
     }
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
+    return next(e);
   }
 });
 
-app.put("/subscriptions/:id", authMiddleware, async (req, res) => {
+app.put("/subscriptions/:id", authMiddleware, async (req, res, next) => {
   try {
     const { accountId, categoryId, service, amount, currency, nextBillingDate } =
       await SubscriptionSchema.parseAsync(req.body);
@@ -634,8 +625,7 @@ app.put("/subscriptions/:id", authMiddleware, async (req, res) => {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
     }
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
+    return next(e);
   }
 });
 
@@ -658,7 +648,7 @@ app.get("/budgets", authMiddleware, async (req, res) => {
   res.json({ budgets: rows });
 });
 
-app.post("/budgets", authMiddleware, async (req, res) => {
+app.post("/budgets", authMiddleware, async (req, res, next) => {
   try {
     const { categoryId, amount, currency, transactionId } = await BudgetSchema.parseAsync(req.body);
     const { rows } = await pool.query(
@@ -673,12 +663,11 @@ app.post("/budgets", authMiddleware, async (req, res) => {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
     }
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
+    return next(e);
   }
 });
 
-app.put("/budgets/:id", authMiddleware, async (req, res) => {
+app.put("/budgets/:id", authMiddleware, async (req, res, next) => {
   try {
     const { categoryId, amount, currency, transactionId } = await BudgetSchema.parseAsync(req.body);
     const { rows } = await pool.query(
@@ -693,8 +682,7 @@ app.put("/budgets/:id", authMiddleware, async (req, res) => {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
     }
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
+    return next(e);
   }
 });
 
@@ -717,7 +705,7 @@ app.get("/goals", authMiddleware, async (req, res) => {
   res.json({ goals: rows });
 });
 
-app.post("/goals", authMiddleware, async (req, res) => {
+app.post("/goals", authMiddleware, async (req, res, next) => {
   try {
     const { name, target, currency, deadline, transactionId } = await GoalSchema.parseAsync(req.body);
     const { rows } = await pool.query(
@@ -731,12 +719,11 @@ app.post("/goals", authMiddleware, async (req, res) => {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
     }
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
+    return next(e);
   }
 });
 
-app.put("/goals/:id", authMiddleware, async (req, res) => {
+app.put("/goals/:id", authMiddleware, async (req, res, next) => {
   try {
     const { name, target, currency, deadline, transactionId } = await GoalSchema.parseAsync(req.body);
     const { rows } = await pool.query(
@@ -751,8 +738,7 @@ app.put("/goals/:id", authMiddleware, async (req, res) => {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
     }
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
+    return next(e);
   }
 });
 
@@ -775,7 +761,7 @@ app.get("/investments", authMiddleware, async (req, res) => {
   res.json({ investments: rows });
 });
 
-app.post("/investments", authMiddleware, async (req, res) => {
+app.post("/investments", authMiddleware, async (req, res, next) => {
   try {
     const { description, amount, currency, transactionId } = await InvestmentSchema.parseAsync(req.body);
     const { rows } = await pool.query(
@@ -789,12 +775,11 @@ app.post("/investments", authMiddleware, async (req, res) => {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
     }
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
+    return next(e);
   }
 });
 
-app.put("/investments/:id", authMiddleware, async (req, res) => {
+app.put("/investments/:id", authMiddleware, async (req, res, next) => {
   try {
     const { description, amount, currency, transactionId } = await InvestmentSchema.parseAsync(req.body);
     const { rows } = await pool.query(
@@ -809,8 +794,7 @@ app.put("/investments/:id", authMiddleware, async (req, res) => {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
     }
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
+    return next(e);
   }
 });
 
@@ -833,7 +817,7 @@ app.get("/loans", authMiddleware, async (req, res) => {
   res.json({ loans: rows });
 });
 
-app.post("/loans", authMiddleware, async (req, res) => {
+app.post("/loans", authMiddleware, async (req, res, next) => {
   try {
     const { description, amount, currency, interestRate, startDate, endDate } = await LoanSchema.parseAsync(req.body);
     const { rows } = await pool.query(
@@ -847,8 +831,7 @@ app.post("/loans", authMiddleware, async (req, res) => {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
     }
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
+    return next(e);
   }
 });
 
@@ -864,7 +847,7 @@ app.get("/loans/:id/payments", authMiddleware, async (req, res) => {
   res.json({ payments: rows });
 });
 
-app.post("/loans/:id/payments", authMiddleware, async (req, res) => {
+app.post("/loans/:id/payments", authMiddleware, async (req, res, next) => {
   try {
     const { amount, paidAt } = await LoanPaymentSchema.parseAsync(req.body);
     const { rows } = await pool.query(
@@ -879,8 +862,7 @@ app.post("/loans/:id/payments", authMiddleware, async (req, res) => {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
     }
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
+    return next(e);
   }
 });
 
@@ -893,7 +875,7 @@ app.get("/reports", authMiddleware, async (req, res) => {
   res.json({ reports: rows });
 });
 
-app.post("/reports", authMiddleware, async (req, res) => {
+app.post("/reports", authMiddleware, async (req, res, next) => {
   try {
     const { name, data } = await ReportSchema.parseAsync(req.body);
     const { rows } = await pool.query(
@@ -905,13 +887,18 @@ app.post("/reports", authMiddleware, async (req, res) => {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
     }
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
+    return next(e);
   }
 });
 
 // Pluggy routes
 app.use("/pluggy", createPluggyRoutes({ pool, authMiddleware, ENC_KEY, createNotification }));
+
+app.use((err, _req, res, _next) => {
+  logger.error(err);
+  res.status(500).json({ error: "INTERNAL_ERROR" });
+});
+
 const PORT = process.env.PORT || 4000;
 
 if (process.env.NODE_ENV !== "test") {
