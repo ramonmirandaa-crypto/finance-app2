@@ -22,6 +22,7 @@ export default function Sidebar() {
       <NavLink href="/dashboard" label="Dashboard" />
       <NavLink href="/contas-e-cartoes" label="Contas e Cartões" />
       <NavLink href="/investimentos" label="Investimentos" />
+      <NavLink href="/emprestimos" label="Empréstimos" />
       <NavLink href="/objetivos" label="Objetivos" />
       <NavLink href="/orcamentos" label="Orçamentos" />
       <NavLink href="/analise" label="Análise" />
