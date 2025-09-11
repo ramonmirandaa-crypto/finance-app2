@@ -3,7 +3,7 @@ import Modal from './Modal';
 import { createCard } from '@/lib/api';
 
 export default function CardModal({ open, onClose, onCreated }) {
-  const [form, setForm] = useState({ number: '', expiration: '', cvc: '', limit: '' });
+  const [form, setForm] = useState({ number: '', expiration: '', limit: '' });
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -15,10 +15,9 @@ export default function CardModal({ open, onClose, onCreated }) {
       await createCard({
         number: form.number,
         expiration: form.expiration,
-        cvc: form.cvc,
         limit: Number(form.limit),
       });
-      setForm({ number: '', expiration: '', cvc: '', limit: '' });
+      setForm({ number: '', expiration: '', limit: '' });
       onCreated?.();
       onClose();
     } catch (err) {
@@ -32,7 +31,6 @@ export default function CardModal({ open, onClose, onCreated }) {
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <input name="number" placeholder="Número" value={form.number} onChange={handleChange} required />
         <input name="expiration" placeholder="Vencimento" value={form.expiration} onChange={handleChange} required />
-        <input name="cvc" placeholder="CVC" value={form.cvc} onChange={handleChange} required />
         <input name="limit" placeholder="Limite" type="number" value={form.limit} onChange={handleChange} required />
         <button type="submit">Salvar</button>
       </form>

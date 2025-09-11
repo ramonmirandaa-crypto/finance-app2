@@ -35,10 +35,10 @@ export async function createAccount(data) {
   });
 }
 
-export async function createCard(data) {
+export async function createCard({ number, expiration, limit }) {
   return apiFetch('/cards', {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: JSON.stringify({ number, expiration, limit }),
   });
 }
 
