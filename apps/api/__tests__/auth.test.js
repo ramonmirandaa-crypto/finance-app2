@@ -1,6 +1,7 @@
 import request from 'supertest';
 import bcrypt from 'bcryptjs';
 import { jest } from '@jest/globals';
+import speakeasy from 'speakeasy';
 
 const mockPoolInstance = { query: jest.fn() };
 const MockPool = jest.fn(() => mockPoolInstance);
@@ -63,5 +64,35 @@ describe('Authentication routes', () => {
 
     expect(res.status).toBe(401);
     expect(res.body.error).toBe('INVALID_CREDENTIALS');
+  });
+
+  test('login requires TOTP when enabled', async () => {
+    const hash = await bcrypt.hash('password123', 10);
+    pool.query.mockResolvedValueOnce({
+      rows: [{ id: '1', name: 'Alice', email: 'alice@example.com', password_hash: hash, twofa_secret: 'ABC', twofa_enabled: true }]
+    });
+
+    const res = await request(app)
+      .post('/auth/login')
+      .send({ email: 'alice@example.com', password: 'password123' });
+
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe('TOTP_REQUIRED');
+  });
+
+  test('login succeeds with valid TOTP', async () => {
+    const secret = 'JBSWY3DPEHPK3PXP';
+    const token = speakeasy.totp({ secret, encoding: 'base32' });
+    const hash = await bcrypt.hash('password123', 10);
+    pool.query.mockResolvedValueOnce({
+      rows: [{ id: '1', name: 'Alice', email: 'alice@example.com', password_hash: hash, twofa_secret: secret, twofa_enabled: true }]
+    });
+
+    const res = await request(app)
+      .post('/auth/login')
+      .send({ email: 'alice@example.com', password: 'password123', totp: token });
+
+    expect(res.status).toBe(200);
+    expect(res.body.token).toBeDefined();
   });
 });

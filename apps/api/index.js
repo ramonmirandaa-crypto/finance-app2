@@ -11,6 +11,7 @@ import logger from "./logger.js";
 import { createRequire } from "module";
 import crypto from "crypto";
 import speakeasy from "speakeasy";
+import QRCode from "qrcode";
 
 dotenv.config();
 const require = createRequire(import.meta.url);
@@ -71,6 +72,7 @@ const RegisterSchema = z.object({
 const LoginSchema = z.object({
   email: z.string().email(),
   password: z.string(),
+  totp: z.string().length(6).optional(),
 });
 
 const TotpSchema = z.object({
@@ -137,6 +139,9 @@ async function ensureSchema() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS twofa_secret TEXT;");
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS twofa_enabled BOOLEAN NOT NULL DEFAULT FALSE;");
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS accounts (
@@ -327,15 +332,59 @@ app.post("/auth/register", authLimiter, async (req, res) => {
 // Login
 app.post("/auth/login", authLimiter, async (req, res) => {
   try {
-    const { email, password } = await LoginSchema.parseAsync(req.body);
+    const { email, password, totp } = await LoginSchema.parseAsync(req.body);
     const { rows } = await pool.query("SELECT * FROM users WHERE email = $1", [email.toLowerCase()]);
     const user = rows[0];
     if (!user) return res.status(401).json({ error: "INVALID_CREDENTIALS" });
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) return res.status(401).json({ error: "INVALID_CREDENTIALS" });
+    if (user.twofa_enabled) {
+      if (!totp) return res.status(401).json({ error: "TOTP_REQUIRED" });
+      const validTotp = speakeasy.totp.verify({ secret: user.twofa_secret, encoding: "base32", token: totp });
+      if (!validTotp) return res.status(401).json({ error: "INVALID_TOTP" });
+    }
     const token = signToken(user);
     res.cookie('token', token, { httpOnly: true, secure: true, sameSite: 'lax' });
     res.json({ user: { id: user.id, name: user.name, email: user.email }, token });
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
+    }
+    logger.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+app.post("/auth/2fa/setup", authMiddleware, async (req, res) => {
+  try {
+    const secret = speakeasy.generateSecret({ name: "Finance App" });
+    await pool.query(
+      "UPDATE users SET twofa_secret = $1, twofa_enabled = FALSE WHERE id = $2",
+      [secret.base32, req.user.sub]
+    );
+    const qrcode = await QRCode.toDataURL(secret.otpauth_url);
+    res.json({ qrcode });
+  } catch (e) {
+    logger.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+app.post("/auth/2fa/verify", authMiddleware, async (req, res) => {
+  try {
+    const { token } = await TotpSchema.parseAsync(req.body);
+    const { rows } = await pool.query(
+      "SELECT twofa_secret FROM users WHERE id = $1",
+      [req.user.sub]
+    );
+    const secret = rows[0]?.twofa_secret;
+    const ok = speakeasy.totp.verify({ secret, encoding: "base32", token });
+    if (!ok) return res.status(400).json({ error: "INVALID_TOTP" });
+    await pool.query(
+      "UPDATE users SET twofa_enabled = TRUE WHERE id = $1",
+      [req.user.sub]
+    );
+    res.json({});
   } catch (e) {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
