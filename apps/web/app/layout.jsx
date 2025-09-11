@@ -1,8 +1,8 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'Finance App',
-  description: 'Gestão financeira pessoal — estilo liquid glass, PT-BR',
+  title: 'FinAI',
+  description: 'Gestão financeira pessoal com IA — estilo liquid glass, PT-BR',
 };
 
 export default function RootLayout({ children }) {
