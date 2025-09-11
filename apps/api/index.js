@@ -116,6 +116,17 @@ const TransactionSchema = z.object({
   description: z.string().optional(),
 });
 
+const RecurringSchema = z.object({
+  accountId: z.string().uuid(),
+  categoryId: z.string().uuid().optional(),
+  type: z.string(),
+  amount: z.number(),
+  currency: z.string(),
+  intervalDays: z.number(),
+  nextOccurrence: z.string(),
+  description: z.string().optional(),
+});
+
 const BudgetSchema = z.object({
   categoryId: z.string().uuid(),
   amount: z.number(),
@@ -651,6 +662,76 @@ app.delete("/transactions/:id", authMiddleware, async (req, res) => {
   res.status(204).send();
 });
 
+// Recurrings
+app.get("/recurrings", authMiddleware, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id, account_id AS "accountId", category_id AS "categoryId", type, amount, currency,
+            interval_days AS "intervalDays", next_occurrence AS "nextOccurrence",
+            pgp_sym_decrypt(description, $2) AS description
+       FROM recurrings
+       WHERE user_id = $1
+       ORDER BY next_occurrence ASC`,
+    [req.user.sub, ENC_KEY]
+  );
+  res.json({ recurrings: rows });
+});
+
+app.post("/recurrings", authMiddleware, async (req, res) => {
+  try {
+    const { accountId, categoryId, type, amount, currency, intervalDays, nextOccurrence, description } =
+      await RecurringSchema.parseAsync(req.body);
+    const { rows } = await pool.query(
+      `INSERT INTO recurrings (user_id, account_id, category_id, type, amount, currency, interval_days, next_occurrence, description)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8, pgp_sym_encrypt($9, $10, 'cipher-algo=aes256'))
+         RETURNING id, account_id AS "accountId", category_id AS "categoryId", type, amount, currency,
+                   interval_days AS "intervalDays", next_occurrence AS "nextOccurrence",
+                   pgp_sym_decrypt(description,$10) AS description`,
+      [req.user.sub, accountId, categoryId, type, amount, currency, intervalDays, nextOccurrence, description, ENC_KEY]
+    );
+    res.status(201).json({ recurring: rows[0] });
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
+    }
+    logger.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+app.put("/recurrings/:id", authMiddleware, async (req, res) => {
+  try {
+    const { accountId, categoryId, type, amount, currency, intervalDays, nextOccurrence, description } =
+      await RecurringSchema.parseAsync(req.body);
+    const { rows } = await pool.query(
+      `UPDATE recurrings SET account_id = $3, category_id = $4, type = $5, amount = $6, currency = $7,
+              interval_days = $8, next_occurrence = $9,
+              description = pgp_sym_encrypt($10, $11, 'cipher-algo=aes256')
+         WHERE id = $1 AND user_id = $2
+         RETURNING id, account_id AS "accountId", category_id AS "categoryId", type, amount, currency,
+                   interval_days AS "intervalDays", next_occurrence AS "nextOccurrence",
+                   pgp_sym_decrypt(description,$11) AS description`,
+      [req.params.id, req.user.sub, accountId, categoryId, type, amount, currency, intervalDays, nextOccurrence, description, ENC_KEY]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: "NOT_FOUND" });
+    res.json({ recurring: rows[0] });
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
+    }
+    logger.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+app.delete("/recurrings/:id", authMiddleware, async (req, res) => {
+  const result = await pool.query(
+    "DELETE FROM recurrings WHERE id = $1 AND user_id = $2",
+    [req.params.id, req.user.sub]
+  );
+  if (result.rowCount === 0) return res.status(404).json({ error: "NOT_FOUND" });
+  res.status(204).send();
+});
+
 // Budgets
 app.get("/budgets", authMiddleware, async (req, res) => {
   const { rows } = await pool.query(
@@ -1152,12 +1233,39 @@ app.post("/pluggy/webhook", async (req, res) => {
   }
 });
 
+async function processRecurrings() {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, user_id, account_id, category_id, type, amount, currency, interval_days, next_occurrence,
+              pgp_sym_decrypt(description, $1) AS description
+         FROM recurrings
+         WHERE next_occurrence <= NOW()`,
+      [ENC_KEY]
+    );
+    for (const r of rows) {
+      await pool.query(
+        `INSERT INTO transactions (user_id, account_id, category_id, type, amount, currency, date, description)
+           VALUES ($1,$2,$3,$4,$5,$6,$7, pgp_sym_encrypt($8,$9,'cipher-algo=aes256'))`,
+        [r.user_id, r.account_id, r.category_id, r.type, r.amount, r.currency, r.next_occurrence, r.description, ENC_KEY]
+      );
+      await pool.query(
+        `UPDATE recurrings SET next_occurrence = next_occurrence + interval_days * INTERVAL '1 day'
+           WHERE id = $1`,
+        [r.id]
+      );
+    }
+  } catch (e) {
+    logger.error(e);
+  }
+}
+
 const PORT = process.env.PORT || 4000;
 
 // Evita iniciar o servidor automaticamente durante os testes
 if (process.env.NODE_ENV !== "test") {
   knexClient.migrate.latest().then(() => {
     app.listen(PORT, () => logger.info(`API online na porta ${PORT}`));
+    setInterval(processRecurrings, 60 * 1000);
   });
 }
 

@@ -221,3 +221,25 @@ export async function createLoanPayment(id, data) {
     body: JSON.stringify(data),
   });
 }
+
+export async function getRecurrings() {
+  return apiFetch('/recurrings');
+}
+
+export async function createRecurring(data) {
+  return apiFetch('/recurrings', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateRecurring(id, data) {
+  return apiFetch(`/recurrings/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteRecurring(id) {
+  return apiFetch(`/recurrings/${id}`, { method: 'DELETE' });
+}
