@@ -13,7 +13,7 @@ export default function LogoutPage() {
       } catch (e) {
         // ignore errors
       }
-      auth.clear();
+      auth.clearLocal();
       router.replace('/login');
     }
     doLogout();

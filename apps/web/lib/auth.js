@@ -6,10 +6,7 @@ export const auth = {
   save() {
     // Token is stored in httpOnly cookie by the server
   },
-  clear() {
-    if (typeof document !== 'undefined') {
-      document.cookie = 'token=; Max-Age=0; path=/';
-    }
+  clearLocal() {
     user = null;
   },
   async getUser(force = false) {
