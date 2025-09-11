@@ -1,11 +1,13 @@
 "use client";
-import { useState } from "react";
-import { apiFetch } from "../../../lib/api";
+import { useState, useEffect } from "react";
+import { apiFetch, convertCurrency } from "../../../lib/api";
 
 export default function Page() {
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState("BRL");
+  const [displayCurrency, setDisplayCurrency] = useState("BRL");
+  const [converted, setConverted] = useState("");
   const [transactionId, setTransactionId] = useState("");
   const [msg, setMsg] = useState("");
 
@@ -30,6 +32,16 @@ export default function Page() {
       setMsg("Erro ao salvar");
     }
   }
+
+  useEffect(() => {
+    if (!amount) {
+      setConverted("");
+      return;
+    }
+    convertCurrency(Number(amount), currency, displayCurrency)
+      .then((v) => setConverted(v.toFixed(2)))
+      .catch(() => setConverted(""));
+  }, [amount, currency, displayCurrency]);
 
   return (
     <section
@@ -81,6 +93,24 @@ export default function Page() {
           <option value="USD">USD</option>
           <option value="EUR">EUR</option>
         </select>
+        <select
+          value={displayCurrency}
+          onChange={(e) => setDisplayCurrency(e.target.value)}
+          style={{
+            padding: 10,
+            borderRadius: 12,
+            border: "1px solid #cbd5e1",
+          }}
+        >
+          <option value="BRL">BRL</option>
+          <option value="USD">USD</option>
+          <option value="EUR">EUR</option>
+        </select>
+        {converted && (
+          <p style={{ fontSize: 13 }}>
+            {`Equivale a ${converted} ${displayCurrency}`}
+          </p>
+        )}
         <input
           placeholder="ID da transação (opcional)"
           value={transactionId}
