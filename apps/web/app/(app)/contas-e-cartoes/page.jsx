@@ -55,7 +55,7 @@ export default function Page() {
             <ul>
               {accounts.map((a) => (
                 <li key={a.id}>
-                  {a.agency} - ****{a.number.slice(-4)}
+                  {a.agency} - ****{a.number}
                 </li>
               ))}
             </ul>
