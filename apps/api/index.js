@@ -276,7 +276,7 @@ app.post("/auth/register", authLimiter, async (req, res) => {
     );
     const user = rows[0];
     const token = signToken(user);
-    res.cookie('token', token, { httpOnly: true, secure: true });
+    res.cookie('token', token, { httpOnly: true, secure: true, sameSite: 'lax' });
     res.status(201).json({ user, token });
   } catch (e) {
     if (e instanceof z.ZodError) {
@@ -300,7 +300,7 @@ app.post("/auth/login", authLimiter, async (req, res) => {
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) return res.status(401).json({ error: "INVALID_CREDENTIALS" });
     const token = signToken(user);
-    res.cookie('token', token, { httpOnly: true, secure: true });
+    res.cookie('token', token, { httpOnly: true, secure: true, sameSite: 'lax' });
     res.json({ user: { id: user.id, name: user.name, email: user.email }, token });
   } catch (e) {
     if (e instanceof z.ZodError) {
