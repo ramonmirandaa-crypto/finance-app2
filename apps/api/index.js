@@ -386,6 +386,12 @@ app.post("/auth/login", authLimiter, async (req, res) => {
   }
 });
 
+app.post("/auth/logout", (req, res) => {
+  res.clearCookie("token");
+  res.clearCookie("csrfToken");
+  res.json({});
+});
+
 app.post("/auth/2fa/setup", authMiddleware, async (req, res) => {
   try {
     const secret = speakeasy.generateSecret({ name: "Finance App" });
