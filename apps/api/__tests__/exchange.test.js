@@ -4,7 +4,7 @@ import { jest } from '@jest/globals';
 const mockGetRate = jest.fn().mockResolvedValue(4.5);
 await jest.unstable_mockModule('../exchange.js', () => ({ getRate: mockGetRate }));
 
-const { default: app } = await import('../index.js');
+const { app } = await import('../index.js');
 
 describe('Exchange rates', () => {
   test('returns rate', async () => {

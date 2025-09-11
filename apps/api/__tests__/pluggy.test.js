@@ -25,7 +25,7 @@ await jest.unstable_mockModule('pluggy-sdk', () => ({ default: MockPluggy }));
 const webhookSecret = 'testsecret';
 process.env.PLUGGY_WEBHOOK_SECRET = webhookSecret;
 
-const { default: app } = await import('../index.js');
+const { app } = await import('../index.js');
 const pool = mockPoolInstance;
 const token = jwt.sign({ sub: '1', name: 'Alice', email: 'alice@example.com' }, 'devsecret');
 const csrf = 'test-csrf';

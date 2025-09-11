@@ -1,21 +1,19 @@
 import express from "express";
 import dotenv from "dotenv";
-import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
 import pkg from "pg";
-import Pluggy from "pluggy-sdk";
 import { z } from "zod";
-import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import logger from "./logger.js";
 import { createRequire } from "module";
-import crypto from "crypto";
-import speakeasy from "speakeasy";
 import { getRate } from "./exchange.js";
 import knex from "knex";
 import knexConfig from "./knexfile.js";
-import QRCode from "qrcode";
-import cron from "node-cron";
+import jwt from "jsonwebtoken";
+
+import createAuthRoutes from "./routes/auth.js";
+import createAccountsRoutes from "./routes/accounts.js";
+import createPluggyRoutes from "./services/pluggy.js";
+import { initScheduler } from "./tasks/scheduler.js";
 
 dotenv.config();
 if (!process.env.JWT_SECRET) {
@@ -32,19 +30,9 @@ if (!process.env.DATA_ENCRYPTION_KEY) {
     throw new Error("DATA_ENCRYPTION_KEY is not defined");
   }
 }
-if (!process.env.PLUGGY_WEBHOOK_SECRET) {
-  throw new Error("PLUGGY_WEBHOOK_SECRET is not defined");
-}
-const PLUGGY_WEBHOOK_SECRET = process.env.PLUGGY_WEBHOOK_SECRET;
 const require = createRequire(import.meta.url);
 const { Pool } = pkg;
 const knexClient = knex(knexConfig);
-
-const pluggy = new Pluggy({
-  clientId: process.env.PLUGGY_CLIENT_ID,
-  clientSecret: process.env.PLUGGY_CLIENT_SECRET,
-  baseUrl: process.env.PLUGGY_BASE_URL || "https://api.pluggy.ai",
-});
 
 const app = express();
 app.use(
@@ -56,12 +44,6 @@ app.use(
 );
 app.use(require("pino-http")({ logger }));
 app.use(helmet());
-
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  handler: (_req, res) => res.status(429).json({ error: "Too Many Requests" }),
-});
 
 // CORS restrito à origem do seu frontend
 app.use((req, res, next) => {
@@ -88,29 +70,6 @@ const pool = new Pool({
 });
 
 const ENC_KEY = process.env.DATA_ENCRYPTION_KEY;
-
-const RegisterSchema = z.object({
-  name: z.string(),
-  email: z.string().email(),
-  password: z.string().min(8),
-});
-
-const LoginSchema = z.object({
-  email: z.string().email(),
-  password: z.string(),
-  totp: z.string().length(6).optional(),
-});
-
-const TotpSchema = z.object({
-  token: z.string().length(6),
-});
-
-const AccountSchema = z.object({
-  agency: z.string(),
-  number: z.string(),
-  manager: z.string().optional(),
-  phone: z.string().optional(),
-});
 
 const CardSchema = z.object({
   number: z.string(),
@@ -234,9 +193,6 @@ const ReportSchema = z.object({
   data: z.any().optional(),
 });
 
-const PluggyItemSchema = z.object({
-  itemId: z.string(),
-});
 
 function signToken(user) {
   const payload = { sub: user.id, name: user.name, email: user.email };
@@ -292,147 +248,7 @@ app.get("/exchange/:base/:target", async (req, res) => {
 });
 
 // Registro
-app.post("/auth/register", authLimiter, async (req, res) => {
-  try {
-    const { name, email, password } = await RegisterSchema.parseAsync(req.body);
-    const hash = await bcrypt.hash(password, 10);
-    const { rows } = await pool.query(
-      "INSERT INTO users (name, email, password_hash) VALUES ($1,$2,$3) RETURNING id, name, email, created_at",
-      [name, email.toLowerCase(), hash]
-    );
-    const user = rows[0];
-    const token = signToken(user);
-
-    const csrfToken = crypto.randomBytes(20).toString("hex");
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-    });
-    res.cookie("csrfToken", csrfToken, {
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-    });
-
-    res.status(201).json({ user });
-  } catch (e) {
-    if (e instanceof z.ZodError) {
-      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
-    }
-    if (String(e).includes("duplicate key")) {
-      return res.status(409).json({ error: "EMAIL_ALREADY_EXISTS" });
-    }
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
-  }
-});
-
-// Login
-app.post("/auth/login", authLimiter, async (req, res) => {
-  try {
-    const { email, password, totp } = await LoginSchema.parseAsync(req.body);
-    const { rows } = await pool.query(
-      "SELECT id, name, email, password_hash, twofa_enabled, pgp_sym_decrypt(twofa_secret, $2) AS twofa_secret FROM users WHERE email = $1",
-      [email.toLowerCase(), ENC_KEY]
-    );
-    const user = rows[0];
-    if (!user) return res.status(401).json({ error: "INVALID_CREDENTIALS" });
-    const ok = await bcrypt.compare(password, user.password_hash);
-    if (!ok) return res.status(401).json({ error: "INVALID_CREDENTIALS" });
-    if (user.twofa_enabled) {
-      if (!totp) return res.status(401).json({ error: "TOTP_REQUIRED" });
-      const validTotp = speakeasy.totp.verify({ secret: user.twofa_secret, encoding: "base32", token: totp });
-      if (!validTotp) return res.status(401).json({ error: "INVALID_TOTP" });
-    }
-    const token = signToken(user);
-    const csrfToken = crypto.randomBytes(20).toString("hex");
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-    });
-    res.cookie("csrfToken", csrfToken, {
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-    });
-    res.json({ user: { id: user.id, name: user.name, email: user.email } });
-  } catch (e) {
-    if (e instanceof z.ZodError) {
-      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
-    }
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
-  }
-});
-
-app.post("/auth/logout", (_req, res) => {
-  res.clearCookie("token");
-  res.clearCookie("csrfToken");
-  res.sendStatus(204);
-});
-
-app.post("/auth/2fa/setup", authMiddleware, async (req, res) => {
-  try {
-    const secret = speakeasy.generateSecret({ name: "Finance App" });
-    await pool.query(
-      "UPDATE users SET twofa_secret = pgp_sym_encrypt($1, $3, 'cipher-algo=aes256'), twofa_enabled = FALSE WHERE id = $2",
-      [secret.base32, req.user.sub, ENC_KEY]
-    );
-    const qrcode = await QRCode.toDataURL(secret.otpauth_url);
-    res.json({ qrcode });
-  } catch (e) {
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
-  }
-});
-
-app.post("/auth/2fa/verify", authMiddleware, async (req, res) => {
-  try {
-    const { token } = await TotpSchema.parseAsync(req.body);
-    const { rows } = await pool.query(
-      "SELECT pgp_sym_decrypt(twofa_secret, $2) AS twofa_secret FROM users WHERE id = $1",
-      [req.user.sub, ENC_KEY]
-    );
-    const secret = rows[0]?.twofa_secret;
-    const ok = speakeasy.totp.verify({ secret, encoding: "base32", token });
-    if (!ok) return res.status(400).json({ error: "INVALID_TOTP" });
-    await pool.query(
-      "UPDATE users SET twofa_enabled = TRUE WHERE id = $1",
-      [req.user.sub]
-    );
-    res.json({});
-  } catch (e) {
-    if (e instanceof z.ZodError) {
-      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
-    }
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
-  }
-});
-
-app.delete("/auth/2fa", authMiddleware, async (req, res) => {
-  try {
-    const { token } = await TotpSchema.parseAsync(req.body);
-    const { rows } = await pool.query(
-      "SELECT pgp_sym_decrypt(twofa_secret, $2) AS twofa_secret FROM users WHERE id = $1",
-      [req.user.sub, ENC_KEY]
-    );
-    const secret = rows[0]?.twofa_secret;
-    const ok = speakeasy.totp.verify({ secret, encoding: "base32", token });
-    if (!ok) return res.status(400).json({ error: "INVALID_TOTP" });
-    await pool.query(
-      "UPDATE users SET twofa_secret = NULL, twofa_enabled = FALSE WHERE id = $1",
-      [req.user.sub]
-    );
-    res.json({});
-  } catch (e) {
-    if (e instanceof z.ZodError) {
-      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
-    }
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
-  }
-});
+app.use("/auth", createAuthRoutes({ pool, authMiddleware, ENC_KEY }));
 
 // Perfil
 app.get("/me", authMiddleware, async (req, res) => {
@@ -457,100 +273,7 @@ app.post("/notifications/:id/read", authMiddleware, async (req, res) => {
 });
 
 // Accounts CRUD
-app.get("/accounts", authMiddleware, async (req, res) => {
-  const { rows } = await pool.query(
-    `SELECT id, agency,
-            RIGHT(pgp_sym_decrypt(account_number, $2), 4) AS number,
-            pgp_sym_decrypt(manager, $2) AS manager,
-            pgp_sym_decrypt(phone, $2) AS phone
-       FROM accounts
-       WHERE user_id = $1
-       ORDER BY created_at DESC`,
-    [req.user.sub, ENC_KEY]
-  );
-  res.json({ accounts: rows });
-});
-
-app.post("/accounts", authMiddleware, async (req, res) => {
-  try {
-    const { agency, number, manager, phone } = await AccountSchema.parseAsync(req.body);
-    const { rows } = await pool.query(
-      `INSERT INTO accounts (user_id, agency, account_number, manager, phone)
-         VALUES ($1, $2,
-                 pgp_sym_encrypt($3, $6, 'cipher-algo=aes256'),
-                 pgp_sym_encrypt($4, $6, 'cipher-algo=aes256'),
-                 pgp_sym_encrypt($5, $6, 'cipher-algo=aes256'))
-       RETURNING id, agency,
-                 pgp_sym_decrypt(account_number, $6) AS number,
-                 pgp_sym_decrypt(manager, $6) AS manager,
-                 pgp_sym_decrypt(phone, $6) AS phone`,
-      [req.user.sub, agency, number, manager, phone, ENC_KEY]
-    );
-    res.status(201).json({ account: rows[0] });
-  } catch (e) {
-    if (e instanceof z.ZodError) {
-      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
-    }
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
-  }
-});
-
-app.get("/accounts/:id", authMiddleware, async (req, res) => {
-  const { rows } = await pool.query(
-    `SELECT id, agency,
-            pgp_sym_decrypt(account_number, $3) AS number,
-            pgp_sym_decrypt(manager, $3) AS manager,
-            pgp_sym_decrypt(phone, $3) AS phone
-       FROM accounts
-       WHERE id = $1 AND user_id = $2`,
-    [req.params.id, req.user.sub, ENC_KEY]
-  );
-  const account = rows[0];
-  if (!account) return res.status(404).json({ error: "NOT_FOUND" });
-  res.json({ account });
-});
-
-app.put("/accounts/:id", authMiddleware, async (req, res) => {
-  try {
-    const { agency, number, manager, phone } = await AccountSchema.parseAsync(req.body);
-    const result = await pool.query(
-      `UPDATE accounts SET
-         agency = $3,
-         account_number = pgp_sym_encrypt($4, $7, 'cipher-algo=aes256'),
-         manager = pgp_sym_encrypt($5, $7, 'cipher-algo=aes256'),
-         phone = pgp_sym_encrypt($6, $7, 'cipher-algo=aes256')
-       WHERE id = $1 AND user_id = $2`,
-      [req.params.id, req.user.sub, agency, number, manager, phone, ENC_KEY]
-    );
-    if (result.rowCount === 0) return res.status(404).json({ error: "NOT_FOUND" });
-    const { rows } = await pool.query(
-      `SELECT id, agency,
-              pgp_sym_decrypt(account_number, $3) AS number,
-              pgp_sym_decrypt(manager, $3) AS manager,
-              pgp_sym_decrypt(phone, $3) AS phone
-         FROM accounts
-         WHERE id = $1 AND user_id = $2`,
-      [req.params.id, req.user.sub, ENC_KEY]
-    );
-    res.json({ account: rows[0] });
-  } catch (e) {
-    if (e instanceof z.ZodError) {
-      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
-    }
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
-  }
-});
-
-app.delete("/accounts/:id", authMiddleware, async (req, res) => {
-  const result = await pool.query(
-    "DELETE FROM accounts WHERE id = $1 AND user_id = $2",
-    [req.params.id, req.user.sub]
-  );
-  if (result.rowCount === 0) return res.status(404).json({ error: "NOT_FOUND" });
-  res.status(204).send();
-});
+app.use("/accounts", createAccountsRoutes({ pool, authMiddleware, ENC_KEY }));
 
 // Cards CRUD
 app.get("/cards", authMiddleware, async (req, res) => {
@@ -1187,304 +910,17 @@ app.post("/reports", authMiddleware, async (req, res) => {
 });
 
 // Pluggy routes
-app.post("/pluggy/link-token", authMiddleware, async (req, res) => {
-  try {
-    const { accessToken } = await pluggy.createConnectToken(undefined, {
-      clientUserId: req.user.sub,
-    });
-    res.json({ linkToken: accessToken });
-  } catch (e) {
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
-  }
-});
-
-app.post("/pluggy/items", authMiddleware, async (req, res) => {
-  try {
-    const { itemId } = await PluggyItemSchema.parseAsync(req.body);
-    const item = await pluggy.fetchItem(itemId);
-    await pool.query(
-      `INSERT INTO pluggy_connectors (id, name)
-         VALUES ($1,$2)
-         ON CONFLICT(id) DO UPDATE SET name = EXCLUDED.name`,
-      [item.connector.id, item.connector.name]
-    );
-    await pool.query(
-      `INSERT INTO pluggy_items (id, user_id, connector_id, status, error, last_sync)
-         VALUES ($1,$2,$3,$4,$5,NOW())
-         ON CONFLICT(id) DO UPDATE SET user_id = EXCLUDED.user_id, connector_id = EXCLUDED.connector_id, status = EXCLUDED.status, error = EXCLUDED.error, last_sync = NOW()`,
-      [
-        item.id,
-        req.user.sub,
-        item.connector.id,
-        item.status,
-        item.error ? item.error.message : null,
-      ]
-    );
-    const accountsResp = await pluggy.fetchAccounts(item.id);
-    const accounts = accountsResp.results || accountsResp;
-    for (const acc of accounts) {
-      const balance = acc.balance && typeof acc.balance === 'object' ? acc.balance.current : acc.balance;
-      await pool.query(
-        `INSERT INTO pluggy_accounts (id, user_id, item_id, name, type, number, agency, balance, currency)
-           VALUES ($1,$2,$3,$4,$5,
-                   pgp_sym_encrypt($6, $10, 'cipher-algo=aes256'),
-                   pgp_sym_encrypt($7, $10, 'cipher-algo=aes256'),
-                   $8,$9)
-           ON CONFLICT(id) DO UPDATE SET name = EXCLUDED.name, type = EXCLUDED.type, number = EXCLUDED.number, agency = EXCLUDED.agency, balance = EXCLUDED.balance, currency = EXCLUDED.currency`,
-        [
-          acc.id,
-          req.user.sub,
-          item.id,
-          acc.name,
-          acc.type,
-          acc.number || null,
-          acc.branchNumber || acc.agency || null,
-          balance,
-          acc.currencyCode || acc.currency || null,
-          ENC_KEY,
-        ]
-      );
-    }
-    const txResp = await pluggy.fetchTransactions(item.id);
-    const txs = txResp.results || txResp;
-    for (const tx of txs) {
-      await pool.query(
-        `INSERT INTO pluggy_transactions (id, user_id, item_id, account_id, description, amount, currency, date)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-           ON CONFLICT(id) DO UPDATE SET account_id = EXCLUDED.account_id, description = EXCLUDED.description, amount = EXCLUDED.amount, currency = EXCLUDED.currency, date = EXCLUDED.date`,
-        [
-          tx.id,
-          req.user.sub,
-          item.id,
-          tx.accountId,
-          tx.description,
-          tx.amount,
-          tx.currencyCode || tx.currency,
-          tx.date,
-        ]
-      );
-    }
-    res
-      .status(201)
-      .json({
-        item: {
-          id: item.id,
-          connector: item.connector.name,
-          status: item.status,
-          error: item.error ? item.error.message : null,
-        },
-      });
-  } catch (e) {
-    if (e instanceof z.ZodError) {
-      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
-    }
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
-  }
-});
-
-app.get("/pluggy/items", authMiddleware, async (req, res) => {
-  const { rows } = await pool.query(
-    `SELECT i.id, c.name AS connector, i.status, i.error
-       FROM pluggy_items i
-       JOIN pluggy_connectors c ON c.id = i.connector_id
-       WHERE i.user_id = $1
-       ORDER BY i.created_at DESC`,
-    [req.user.sub]
-  );
-  res.json({ items: rows });
-});
-
-app.get("/pluggy/accounts", authMiddleware, async (req, res) => {
-  const { rows } = await pool.query(
-    `SELECT id, item_id AS "itemId", name, type,
-            pgp_sym_decrypt(number, $2) AS number,
-            pgp_sym_decrypt(agency, $2) AS agency,
-            balance, currency
-       FROM pluggy_accounts
-       WHERE user_id = $1
-       ORDER BY name`,
-    [req.user.sub, ENC_KEY]
-  );
-  res.json({ accounts: rows });
-});
-
-app.get("/pluggy/transactions", authMiddleware, async (req, res) => {
-  const { rows } = await pool.query(
-    `SELECT id, item_id AS "itemId", account_id AS "accountId", description, amount, currency, date
-       FROM pluggy_transactions
-       WHERE user_id = $1
-       ORDER BY date DESC`,
-    [req.user.sub]
-  );
-  res.json({ transactions: rows });
-});
-
-app.post("/pluggy/items/:id/sync", authMiddleware, async (req, res) => {
-  try {
-    await pluggy.updateItem(req.params.id);
-    const item = await pluggy.fetchItem(req.params.id);
-    const accountsResp = await pluggy.fetchAccounts(req.params.id);
-    const accounts = accountsResp.results || accountsResp;
-    for (const acc of accounts) {
-      const balance = acc.balance && typeof acc.balance === 'object' ? acc.balance.current : acc.balance;
-      await pool.query(
-        `INSERT INTO pluggy_accounts (id, user_id, item_id, name, type, number, agency, balance, currency)
-           VALUES ($1,$2,$3,$4,$5,
-                   pgp_sym_encrypt($6, $10, 'cipher-algo=aes256'),
-                   pgp_sym_encrypt($7, $10, 'cipher-algo=aes256'),
-                   $8,$9)
-           ON CONFLICT(id) DO UPDATE SET name = EXCLUDED.name, type = EXCLUDED.type, number = EXCLUDED.number, agency = EXCLUDED.agency, balance = EXCLUDED.balance, currency = EXCLUDED.currency`,
-        [
-          acc.id,
-          req.user.sub,
-          req.params.id,
-          acc.name,
-          acc.type,
-          acc.number || null,
-          acc.branchNumber || acc.agency || null,
-          balance,
-          acc.currencyCode || acc.currency || null,
-          ENC_KEY,
-        ]
-      );
-    }
-    const txResp = await pluggy.fetchTransactions(req.params.id);
-    const txs = txResp.results || txResp;
-    for (const tx of txs) {
-      await pool.query(
-        `INSERT INTO pluggy_transactions (id, user_id, item_id, account_id, description, amount, currency, date)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-           ON CONFLICT(id) DO UPDATE SET account_id = EXCLUDED.account_id, description = EXCLUDED.description, amount = EXCLUDED.amount, currency = EXCLUDED.currency, date = EXCLUDED.date`,
-        [
-          tx.id,
-          req.user.sub,
-          req.params.id,
-          tx.accountId,
-          tx.description,
-          tx.amount,
-          tx.currencyCode || tx.currency,
-          tx.date,
-        ]
-      );
-    }
-      await pool.query(
-        `UPDATE pluggy_items SET status = $1, error = $2, last_sync = NOW() WHERE id = $3 AND user_id = $4`,
-        [item.status, item.error ? item.error.message : null, req.params.id, req.user.sub]
-      );
-      await createNotification(req.user.sub, 'pluggy_sync', 'Sincronização Pluggy concluída');
-      res.status(200).json({ status: item.status });
-    } catch (e) {
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
-  }
-});
-
-app.post("/pluggy/webhook", async (req, res) => {
-  const signature = req.get("x-pluggy-signature");
-  const expected = crypto
-    .createHmac("sha256", PLUGGY_WEBHOOK_SECRET)
-    .update(req.rawBody || "")
-    .digest("base64");
-  if (
-    !signature ||
-    signature.length !== expected.length ||
-    !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
-  ) {
-    return res.status(401).json({ error: "INVALID_SIGNATURE" });
-  }
-
-  const { itemId } = req.body || {};
-  if (!itemId) return res.status(400).json({ error: "INVALID_BODY" });
-  try {
-    const item = await pluggy.fetchItem(itemId);
-    if (!item.clientUserId) return res.status(200).json({});
-    await pool.query(
-      `INSERT INTO pluggy_connectors (id, name)
-         VALUES ($1,$2)
-         ON CONFLICT(id) DO UPDATE SET name = EXCLUDED.name`,
-      [item.connector.id, item.connector.name]
-    );
-    await pool.query(
-      `INSERT INTO pluggy_items (id, user_id, connector_id, status, error, last_sync)
-         VALUES ($1,$2,$3,$4,$5,NOW())
-         ON CONFLICT(id) DO UPDATE SET user_id = EXCLUDED.user_id, connector_id = EXCLUDED.connector_id, status = EXCLUDED.status, error = EXCLUDED.error, last_sync = NOW()`,
-      [
-        item.id,
-        item.clientUserId,
-        item.connector.id,
-        item.status,
-        item.error ? item.error.message : null,
-      ]
-    );
-    res.json({});
-  } catch (e) {
-    logger.error(e);
-    res.status(500).json({ error: "INTERNAL_ERROR" });
-  }
-});
-
-async function processRecurrings() {
-  try {
-    const { rows } = await pool.query(
-      `SELECT id, user_id, account_id, category_id, type, amount, currency, interval_days, next_occurrence,
-              pgp_sym_decrypt(description, $1) AS description
-         FROM recurrings
-         WHERE next_occurrence <= NOW()`,
-      [ENC_KEY]
-    );
-    for (const r of rows) {
-      await pool.query(
-        `INSERT INTO transactions (user_id, account_id, category_id, type, amount, currency, date, description)
-           VALUES ($1,$2,$3,$4,$5,$6,$7, pgp_sym_encrypt($8,$9,'cipher-algo=aes256'))`,
-        [r.user_id, r.account_id, r.category_id, r.type, r.amount, r.currency, r.next_occurrence, r.description, ENC_KEY]
-      );
-      await checkBudget(r.user_id, r.category_id);
-      await pool.query(
-        `UPDATE recurrings SET next_occurrence = next_occurrence + interval_days * INTERVAL '1 day'
-           WHERE id = $1`,
-        [r.id]
-      );
-    }
-  } catch (e) {
-    logger.error(e);
-  }
-}
-
-async function processScheduled() {
-  try {
-    const { rows } = await pool.query(
-      `SELECT id, user_id, account_id, category_id, type, amount, currency, date,
-              pgp_sym_decrypt(description, $1) AS description
-         FROM scheduled_transactions
-         WHERE execute_at <= NOW()`,
-      [ENC_KEY]
-    );
-    for (const t of rows) {
-      await pool.query(
-        `INSERT INTO transactions (user_id, account_id, category_id, type, amount, currency, date, description)
-           VALUES ($1,$2,$3,$4,$5,$6,$7, pgp_sym_encrypt($8,$9,'cipher-algo=aes256'))`,
-        [t.user_id, t.account_id, t.category_id, t.type, t.amount, t.currency, t.date, t.description, ENC_KEY]
-      );
-      await checkBudget(t.user_id, t.category_id);
-      await pool.query(`DELETE FROM scheduled_transactions WHERE id = $1`, [t.id]);
-    }
-  } catch (e) {
-    logger.error(e);
-  }
-}
-
+app.use("/pluggy", createPluggyRoutes({ pool, authMiddleware, ENC_KEY, createNotification }));
 const PORT = process.env.PORT || 4000;
 
-// Evita iniciar o servidor automaticamente durante os testes
 if (process.env.NODE_ENV !== "test") {
   knexClient.migrate.latest().then(() => {
     app.listen(PORT, () => logger.info(`API online na porta ${PORT}`));
-    setInterval(processRecurrings, 60 * 1000);
-    cron.schedule("* * * * *", processScheduled);
+    initScheduler({ pool, ENC_KEY, checkBudget, logger });
   });
 }
+
+
 
 export { app, pool };
 export default app;
