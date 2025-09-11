@@ -79,6 +79,28 @@ export async function getPluggyTransactions() {
   return apiFetch('/pluggy/transactions');
 }
 
+export async function getTransactions() {
+  return apiFetch('/transactions');
+}
+
+export async function createTransaction(data) {
+  return apiFetch('/transactions', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateTransaction(id, data) {
+  return apiFetch(`/transactions/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteTransaction(id) {
+  return apiFetch(`/transactions/${id}`, { method: 'DELETE' });
+}
+
 export async function getCategories() {
   return apiFetch('/categories');
 }

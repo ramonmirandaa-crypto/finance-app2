@@ -2,18 +2,30 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/lib/auth';
+import { getTransactions } from '@/lib/api';
+import TransactionModal from '@/components/TransactionModal';
 
 export default function Dashboard() {
   const router = useRouter();
   const [user, setUser] = useState(null);
+  const [transactions, setTransactions] = useState([]);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    auth.getUser()
-      .then(setUser)
+    auth
+      .getUser()
+      .then((u) => {
+        setUser(u);
+        return getTransactions();
+      })
+      .then((d) => setTransactions(d.transactions))
       .catch((e) => {
         if (e.status === 401) router.replace('/login');
       });
   }, [router]);
+
+  const refresh = () =>
+    getTransactions().then((d) => setTransactions(d.transactions));
 
   if (!user) return null;
 
@@ -26,8 +38,20 @@ export default function Dashboard() {
       }}>
         <h2 style={{marginTop:0}}>Painel</h2>
         <p>Bem-vindo, <strong>{user.name}</strong> ({user.email}).</p>
-        <p>Em breve: saldos, cartões, investimentos, objetivos e Pluggy.</p>
+        <button onClick={() => setOpen(true)}>Nova Transação</button>
+        <ul>
+          {transactions.map((t) => (
+            <li key={t.id}>
+              {t.description || t.type} - {t.amount} {t.currency}
+            </li>
+          ))}
+        </ul>
       </div>
+      <TransactionModal
+        open={open}
+        onClose={() => setOpen(false)}
+        onCreated={refresh}
+      />
     </main>
   );
 }
