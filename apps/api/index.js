@@ -10,6 +10,8 @@ import helmet from "helmet";
 import logger from "./logger.js";
 import { createRequire } from "module";
 import crypto from "crypto";
+import speakeasy from "speakeasy";
+import QRCode from "qrcode";
 
 dotenv.config();
 const require = createRequire(import.meta.url);
@@ -70,6 +72,7 @@ const RegisterSchema = z.object({
 const LoginSchema = z.object({
   email: z.string().email(),
   password: z.string(),
+  totp: z.string().optional(),
 });
 
 const AccountSchema = z.object({
@@ -89,6 +92,8 @@ const PluggyItemSchema = z.object({
   itemId: z.string(),
 });
 
+const TotpSchema = z.object({ token: z.string() });
+
 // Cria extensão e tabela users se não existirem
 async function ensureSchema() {
   try { await pool.query('CREATE EXTENSION IF NOT EXISTS "pgcrypto";'); } catch (_) {}
@@ -101,6 +106,10 @@ async function ensureSchema() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+
+  await pool.query(
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS twofa_secret TEXT, ADD COLUMN IF NOT EXISTS twofa_enabled BOOLEAN NOT NULL DEFAULT FALSE;"
+  );
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS accounts (
@@ -206,12 +215,17 @@ app.post("/auth/register", authLimiter, async (req, res) => {
 // Login
 app.post("/auth/login", authLimiter, async (req, res) => {
   try {
-    const { email, password } = await LoginSchema.parseAsync(req.body);
+    const { email, password, totp } = await LoginSchema.parseAsync(req.body);
     const { rows } = await pool.query("SELECT * FROM users WHERE email = $1", [email.toLowerCase()]);
     const user = rows[0];
     if (!user) return res.status(401).json({ error: "INVALID_CREDENTIALS" });
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) return res.status(401).json({ error: "INVALID_CREDENTIALS" });
+    if (user.twofa_enabled) {
+      if (!totp) return res.status(401).json({ error: "TOTP_REQUIRED" });
+      const verified = speakeasy.totp.verify({ secret: user.twofa_secret, encoding: "base32", token: totp });
+      if (!verified) return res.status(401).json({ error: "INVALID_TOTP" });
+    }
     const token = signToken(user);
     res.cookie('token', token, { httpOnly: true, secure: true });
     res.json({ user: { id: user.id, name: user.name, email: user.email }, token });
@@ -224,9 +238,53 @@ app.post("/auth/login", authLimiter, async (req, res) => {
   }
 });
 
+app.post("/auth/2fa/setup", authMiddleware, async (req, res) => {
+  try {
+    const secret = speakeasy.generateSecret({ name: `Finance (${req.user.email})` });
+    await pool.query(
+      "UPDATE users SET twofa_secret=$1, twofa_enabled=false WHERE id=$2",
+      [secret.base32, req.user.sub]
+    );
+    const qr = await QRCode.toDataURL(secret.otpauth_url);
+    res.json({ secret: secret.base32, qr });
+  } catch (e) {
+    logger.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+app.post("/auth/2fa/verify", authMiddleware, async (req, res) => {
+  try {
+    const { token } = await TotpSchema.parseAsync(req.body);
+    const { rows } = await pool.query("SELECT twofa_secret FROM users WHERE id=$1", [req.user.sub]);
+    const secret = rows[0]?.twofa_secret;
+    if (!secret) return res.status(400).json({ error: "SETUP_REQUIRED" });
+    const ok = speakeasy.totp.verify({ secret, encoding: "base32", token });
+    if (!ok) return res.status(400).json({ error: "INVALID_TOTP" });
+    await pool.query("UPDATE users SET twofa_enabled=true WHERE id=$1", [req.user.sub]);
+    res.json({ enabled: true });
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
+    }
+    logger.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+app.delete("/auth/2fa", authMiddleware, async (req, res) => {
+  try {
+    await pool.query("UPDATE users SET twofa_secret=NULL, twofa_enabled=false WHERE id=$1", [req.user.sub]);
+    res.status(204).send();
+  } catch (e) {
+    logger.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
 // Perfil
 app.get("/me", authMiddleware, async (req, res) => {
-  const { rows } = await pool.query("SELECT id, name, email, created_at FROM users WHERE id = $1", [req.user.sub]);
+  const { rows } = await pool.query("SELECT id, name, email, created_at, twofa_enabled FROM users WHERE id = $1", [req.user.sub]);
   res.json({ user: rows[0] || null });
 });
 

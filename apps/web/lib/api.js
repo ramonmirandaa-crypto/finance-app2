@@ -53,3 +53,18 @@ export async function getPluggyItems() {
 export async function syncPluggyItem(id) {
   return apiFetch(`/pluggy/items/${id}/sync`, { method: 'POST' });
 }
+
+export async function setup2FA() {
+  return apiFetch('/auth/2fa/setup', { method: 'POST' });
+}
+
+export async function verify2FA(token) {
+  return apiFetch('/auth/2fa/verify', {
+    method: 'POST',
+    body: JSON.stringify({ token })
+  });
+}
+
+export async function disable2FA() {
+  return apiFetch('/auth/2fa', { method: 'DELETE' });
+}

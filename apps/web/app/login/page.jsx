@@ -8,6 +8,7 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
+  const [totp, setTotp] = useState('');
   const [msg, setMsg] = useState('');
 
   async function onSubmit(e) {
@@ -16,7 +17,7 @@ export default function LoginPage() {
     try {
       const data = await apiFetch('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email, password: senha })
+        body: JSON.stringify({ email, password: senha, totp })
       });
       auth.save(data.token);
       router.replace('/dashboard');
@@ -38,6 +39,9 @@ export default function LoginPage() {
           style={{width:'100%', padding:10, borderRadius:12, border:'1px solid #cbd5e1', marginBottom:12}}/>
         <label>Senha</label>
         <input value={senha} onChange={e=>setSenha(e.target.value)} type="password" required
+          style={{width:'100%', padding:10, borderRadius:12, border:'1px solid #cbd5e1', marginBottom:12}}/>
+        <label>Código 2FA</label>
+        <input value={totp} onChange={e=>setTotp(e.target.value)}
           style={{width:'100%', padding:10, borderRadius:12, border:'1px solid #cbd5e1', marginBottom:12}}/>
         <button type="submit" style={{
           width:'100%', padding:12, borderRadius:12, border:'none', cursor:'pointer',
