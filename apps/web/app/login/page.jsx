@@ -9,19 +9,28 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [msg, setMsg] = useState('');
+  const [totp, setTotp] = useState('');
+  const [needsTotp, setNeedsTotp] = useState(false);
 
   async function onSubmit(e) {
     e.preventDefault();
     setMsg('Entrando...');
     try {
+      const body = { email, password: senha };
+      if (needsTotp) body.totp = totp;
       const data = await apiFetch('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email, password: senha })
+        body: JSON.stringify(body)
       });
       auth.save(data.token);
       router.replace('/dashboard');
     } catch (e) {
-      setMsg(e?.data?.error || 'Falha no login');
+      if (e?.data?.error === 'TOTP_REQUIRED') {
+        setNeedsTotp(true);
+        setMsg('Informe o código TOTP e tente novamente');
+      } else {
+        setMsg(e?.data?.error || 'Falha no login');
+      }
     }
   }
 
@@ -39,6 +48,13 @@ export default function LoginPage() {
         <label>Senha</label>
         <input value={senha} onChange={e=>setSenha(e.target.value)} type="password" required
           style={{width:'100%', padding:10, borderRadius:12, border:'1px solid #cbd5e1', marginBottom:12}}/>
+        {needsTotp && (
+          <>
+            <label>Código TOTP</label>
+            <input value={totp} onChange={e=>setTotp(e.target.value)} required
+              style={{width:'100%', padding:10, borderRadius:12, border:'1px solid #cbd5e1', marginBottom:12}}/>
+          </>
+        )}
         <button type="submit" style={{
           width:'100%', padding:12, borderRadius:12, border:'none', cursor:'pointer',
           background:'#1d4ed8', color:'white', fontWeight:600
