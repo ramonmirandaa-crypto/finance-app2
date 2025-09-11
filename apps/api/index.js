@@ -11,11 +11,14 @@ import logger from "./logger.js";
 import { createRequire } from "module";
 import crypto from "crypto";
 import speakeasy from "speakeasy";
+import knex from "knex";
+import knexConfig from "./knexfile.js";
 import QRCode from "qrcode";
 
 dotenv.config();
 const require = createRequire(import.meta.url);
 const { Pool } = pkg;
+const knexClient = knex(knexConfig);
 
 const pluggy = new Pluggy({
   clientId: process.env.PLUGGY_CLIENT_ID,
@@ -1000,10 +1003,10 @@ const PORT = process.env.PORT || 4000;
 
 // Evita iniciar o servidor automaticamente durante os testes
 if (process.env.NODE_ENV !== "test") {
-  ensureSchema().then(() => {
+  knexClient.migrate.latest().then(() => {
     app.listen(PORT, () => logger.info(`API online na porta ${PORT}`));
-  });
+  }).finally(() => knexClient.destroy());
 }
 
-export { app, pool, ensureSchema };
+export { app, pool };
 export default app;
