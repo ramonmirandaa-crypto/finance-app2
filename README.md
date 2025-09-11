@@ -23,7 +23,7 @@ npm install helmet
 
 ### Variáveis de ambiente
 
-As variáveis `JWT_SECRET` e `DATA_ENCRYPTION_KEY` são obrigatórias e a API não inicia sem elas.
+As variáveis `JWT_SECRET`, `DATA_ENCRYPTION_KEY` e `PLUGGY_WEBHOOK_SECRET` são obrigatórias e a API não inicia sem elas.
 
 | Serviço | Variável | Descrição |
 | --- | --- | --- |
@@ -37,6 +37,7 @@ As variáveis `JWT_SECRET` e `DATA_ENCRYPTION_KEY` são obrigatórias e a API n�
 | API | PLUGGY_CLIENT_ID | Client ID do Pluggy |
 | API | PLUGGY_CLIENT_SECRET | Client Secret do Pluggy |
 | API | PLUGGY_BASE_URL | URL base da API do Pluggy |
+| API | PLUGGY_WEBHOOK_SECRET | Chave usada para validar a assinatura do webhook do Pluggy (obrigatória) |
 | API | LOG_LEVEL | Nível de log da API |
 | API | JWT_SECRET | Chave secreta usada na assinatura de tokens JWT para autenticação (obrigatória) |
 | API | NODE_ENV | Ambiente da aplicação (`development` ou `production`); em `production` os cookies usam `secure` e exigem HTTPS |
