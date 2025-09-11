@@ -342,8 +342,15 @@ app.post("/auth/register", authLimiter, async (req, res) => {
     const token = signToken(user);
 
     const csrfToken = crypto.randomBytes(20).toString("hex");
-    res.cookie("token", token, { httpOnly: true, secure: true, sameSite: "lax" });
-    res.cookie("csrfToken", csrfToken, { secure: true, sameSite: "lax" });
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+    });
+    res.cookie("csrfToken", csrfToken, {
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+    });
 
     res.status(201).json({ user, token });
   } catch (e) {
@@ -374,8 +381,15 @@ app.post("/auth/login", authLimiter, async (req, res) => {
     }
     const token = signToken(user);
     const csrfToken = crypto.randomBytes(20).toString("hex");
-    res.cookie("token", token, { httpOnly: true, secure: true, sameSite: "lax" });
-    res.cookie("csrfToken", csrfToken, { secure: true, sameSite: "lax" });
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+    });
+    res.cookie("csrfToken", csrfToken, {
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+    });
     res.json({ user: { id: user.id, name: user.name, email: user.email }, token });
   } catch (e) {
     if (e instanceof z.ZodError) {
