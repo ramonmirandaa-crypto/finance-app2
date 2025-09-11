@@ -9,7 +9,7 @@ export default function Topbar({ user }) {
 
   async function sair() {
     await apiFetch('/auth/logout', { method: 'POST' });
-    auth.clear();
+    auth.clearLocal();
     router.replace('/login');
   }
 
