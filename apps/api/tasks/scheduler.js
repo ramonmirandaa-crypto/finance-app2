@@ -51,6 +51,13 @@ export function initScheduler({ pool, ENC_KEY, checkBudget, logger }) {
     }
   }
 
-  setInterval(processRecurrings, 60 * 1000);
-  cron.schedule('* * * * *', processScheduled);
+  const recurringsInterval = setInterval(processRecurrings, 60 * 1000);
+  const scheduledJob = cron.schedule('* * * * *', processScheduled);
+
+  return {
+    stop() {
+      clearInterval(recurringsInterval);
+      scheduledJob.stop();
+    },
+  };
 }
