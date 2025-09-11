@@ -1,6 +1,7 @@
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import { jest } from '@jest/globals';
+import crypto from 'crypto';
 
 const mockPoolInstance = { query: jest.fn() };
 const MockPool = jest.fn(() => mockPoolInstance);
@@ -9,6 +10,11 @@ await jest.unstable_mockModule('pg', () => ({ default: { Pool: MockPool }, Pool:
 const { default: app } = await import('../index.js');
 const pool = mockPoolInstance;
 const token = jwt.sign({ sub: '1', name: 'Alice', email: 'alice@example.com' }, 'devsecret');
+
+const webhookSecret = 'testsecret';
+process.env.PLUGGY_WEBHOOK_SECRET = webhookSecret;
+const sign = (body) =>
+  crypto.createHmac('sha256', webhookSecret).update(JSON.stringify(body)).digest('base64');
 
 describe('Pluggy routes', () => {
   beforeEach(() => {
@@ -56,15 +62,21 @@ describe('Pluggy routes', () => {
   });
 
   test('webhook requires itemId', async () => {
-    const res = await request(app).post('/pluggy/webhook').send({});
+    const payload = {};
+    const res = await request(app)
+      .post('/pluggy/webhook')
+      .set('X-Pluggy-Signature', sign(payload))
+      .send(payload);
     expect(res.status).toBe(400);
   });
 
   test('webhook saves item', async () => {
     pool.query.mockResolvedValue({});
+    const payload = { itemId: 'it1' };
     const res = await request(app)
       .post('/pluggy/webhook')
-      .send({ itemId: 'it1' });
+      .set('X-Pluggy-Signature', sign(payload))
+      .send(payload);
     expect(res.status).toBe(200);
     expect(pool.query).toHaveBeenCalledTimes(2);
   });
