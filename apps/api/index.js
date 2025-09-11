@@ -106,6 +106,16 @@ const CategorySchema = z.object({
   name: z.string(),
 });
 
+const TransactionSchema = z.object({
+  accountId: z.string().uuid(),
+  categoryId: z.string().uuid().optional(),
+  type: z.string(),
+  amount: z.number(),
+  currency: z.string(),
+  date: z.string(),
+  description: z.string().optional(),
+});
+
 const BudgetSchema = z.object({
   categoryId: z.string().uuid(),
   amount: z.number(),
@@ -554,6 +564,77 @@ app.post("/categories", authMiddleware, async (req, res) => {
     logger.error(e);
     res.status(500).json({ error: "INTERNAL_ERROR" });
   }
+});
+
+// Transactions
+app.get("/transactions", authMiddleware, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id, account_id AS "accountId", category_id AS "categoryId", type, amount, currency, date,
+            pgp_sym_decrypt(description, $2) AS description
+       FROM transactions
+       WHERE user_id = $1
+       ORDER BY date DESC`,
+    [req.user.sub, ENC_KEY]
+  );
+  res.json({ transactions: rows });
+});
+
+app.post("/transactions", authMiddleware, async (req, res) => {
+  try {
+    const { accountId, categoryId, type, amount, currency, date, description } =
+      await TransactionSchema.parseAsync(req.body);
+    const { rows } = await pool.query(
+      `INSERT INTO transactions (user_id, account_id, category_id, type, amount, currency, date, description)
+         VALUES ($1,$2,$3,$4,$5,$6,$7, pgp_sym_encrypt($8, $9, 'cipher-algo=aes256'))
+         RETURNING id, account_id AS "accountId", category_id AS "categoryId", type, amount, currency, date,
+                   pgp_sym_decrypt(description, $9) AS description`,
+      [req.user.sub, accountId, categoryId, type, amount, currency, date, description, ENC_KEY]
+    );
+    res.status(201).json({ transaction: rows[0] });
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
+    }
+    logger.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+app.put("/transactions/:id", authMiddleware, async (req, res) => {
+  try {
+    const { accountId, categoryId, type, amount, currency, date, description } =
+      await TransactionSchema.parseAsync(req.body);
+    const result = await pool.query(
+      `UPDATE transactions SET account_id = $3, category_id = $4, type = $5, amount = $6, currency = $7, date = $8,
+              description = pgp_sym_encrypt($9, $10, 'cipher-algo=aes256')
+         WHERE id = $1 AND user_id = $2`,
+      [req.params.id, req.user.sub, accountId, categoryId, type, amount, currency, date, description, ENC_KEY]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: "NOT_FOUND" });
+    const { rows } = await pool.query(
+      `SELECT id, account_id AS "accountId", category_id AS "categoryId", type, amount, currency, date,
+              pgp_sym_decrypt(description, $3) AS description
+         FROM transactions
+         WHERE id = $1 AND user_id = $2`,
+      [req.params.id, req.user.sub, ENC_KEY]
+    );
+    res.json({ transaction: rows[0] });
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
+    }
+    logger.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+app.delete("/transactions/:id", authMiddleware, async (req, res) => {
+  const result = await pool.query(
+    "DELETE FROM transactions WHERE id = $1 AND user_id = $2",
+    [req.params.id, req.user.sub]
+  );
+  if (result.rowCount === 0) return res.status(404).json({ error: "NOT_FOUND" });
+  res.status(204).send();
 });
 
 // Budgets
