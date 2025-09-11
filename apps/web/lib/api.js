@@ -5,6 +5,13 @@ export async function apiFetch(path, options = {}) {
     'Content-Type': 'application/json',
     ...(options.headers || {})
   };
+  const csrfMatch = typeof document !== 'undefined'
+    ? document.cookie
+        ?.split(';')
+        .map((c) => c.trim())
+        .find((c) => c.startsWith('csrfToken='))
+    : null;
+  if (csrfMatch) headers['x-csrf-token'] = csrfMatch.slice('csrfToken='.length);
   const res = await fetch(`${BASE}${path}`, { ...options, headers, credentials: 'include' });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -52,6 +59,14 @@ export async function getPluggyItems() {
 
 export async function syncPluggyItem(id) {
   return apiFetch(`/pluggy/items/${id}/sync`, { method: 'POST' });
+}
+
+export async function getPluggyAccounts() {
+  return apiFetch('/pluggy/accounts');
+}
+
+export async function getPluggyTransactions() {
+  return apiFetch('/pluggy/transactions');
 }
 
 export async function getCategories() {
@@ -106,5 +121,16 @@ export async function createReport(data) {
   return apiFetch('/reports', {
     method: 'POST',
     body: JSON.stringify(data),
+  });
+}
+
+export async function setup2fa() {
+  return apiFetch('/auth/2fa/setup', { method: 'POST' });
+}
+
+export async function verify2fa(token) {
+  return apiFetch('/auth/2fa/verify', {
+    method: 'POST',
+    body: JSON.stringify({ token }),
   });
 }

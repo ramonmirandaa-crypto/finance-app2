@@ -9,6 +9,7 @@ await jest.unstable_mockModule('pg', () => ({ default: { Pool: MockPool }, Pool:
 const { default: app } = await import('../index.js');
 const pool = mockPoolInstance;
 const token = jwt.sign({ sub: '1', name: 'Alice', email: 'alice@example.com' }, 'devsecret');
+const csrf = 'test-csrf';
 
 describe('Accounts routes', () => {
   beforeEach(() => {
@@ -28,7 +29,9 @@ describe('Accounts routes', () => {
 
     const res = await request(app)
       .get('/accounts')
-      .set('Authorization', `Bearer ${token}`);
+      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', `csrfToken=${csrf}`)
+      .set('x-csrf-token', csrf);
 
     expect(res.status).toBe(200);
     expect(res.body.accounts).toHaveLength(1);
@@ -42,6 +45,8 @@ describe('Accounts routes', () => {
     const res = await request(app)
       .post('/accounts')
       .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', `csrfToken=${csrf}`)
+      .set('x-csrf-token', csrf)
       .send({ agency: '001', number: '1234', manager: 'Bob', phone: '9999' });
 
     expect(res.status).toBe(201);
@@ -52,6 +57,8 @@ describe('Accounts routes', () => {
     const res = await request(app)
       .post('/accounts')
       .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', `csrfToken=${csrf}`)
+      .set('x-csrf-token', csrf)
       .send({ agency: '001' });
 
     expect(res.status).toBe(400);
@@ -63,7 +70,9 @@ describe('Accounts routes', () => {
 
     const res = await request(app)
       .get('/accounts/nonexistent')
-      .set('Authorization', `Bearer ${token}`);
+      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', `csrfToken=${csrf}`)
+      .set('x-csrf-token', csrf);
 
     expect(res.status).toBe(404);
     expect(res.body.error).toBe('NOT_FOUND');

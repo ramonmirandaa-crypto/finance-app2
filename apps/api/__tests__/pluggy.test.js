@@ -10,6 +10,7 @@ await jest.unstable_mockModule('pg', () => ({ default: { Pool: MockPool }, Pool:
 const { default: app } = await import('../index.js');
 const pool = mockPoolInstance;
 const token = jwt.sign({ sub: '1', name: 'Alice', email: 'alice@example.com' }, 'devsecret');
+const csrf = 'test-csrf';
 
 const webhookSecret = 'testsecret';
 process.env.PLUGGY_WEBHOOK_SECRET = webhookSecret;
@@ -24,7 +25,9 @@ describe('Pluggy routes', () => {
   test('generates link token', async () => {
     const res = await request(app)
       .post('/pluggy/link-token')
-      .set('Authorization', `Bearer ${token}`);
+      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', `csrfToken=${csrf}`)
+      .set('x-csrf-token', csrf);
     expect(res.status).toBe(200);
     expect(res.body.linkToken).toBeDefined();
   });
@@ -35,6 +38,8 @@ describe('Pluggy routes', () => {
     const res = await request(app)
       .post('/pluggy/items')
       .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', `csrfToken=${csrf}`)
+      .set('x-csrf-token', csrf)
       .send({ itemId: 'it1' });
     expect(res.status).toBe(201);
     expect(pool.query).toHaveBeenCalledTimes(2);
@@ -48,7 +53,9 @@ describe('Pluggy routes', () => {
     });
     const res = await request(app)
       .get('/pluggy/items')
-      .set('Authorization', `Bearer ${token}`);
+      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', `csrfToken=${csrf}`)
+      .set('x-csrf-token', csrf);
     expect(res.status).toBe(200);
     expect(res.body.items).toHaveLength(1);
   });
@@ -57,7 +64,9 @@ describe('Pluggy routes', () => {
     pool.query.mockResolvedValueOnce({});
     const res = await request(app)
       .post('/pluggy/items/it1/sync')
-      .set('Authorization', `Bearer ${token}`);
+      .set('Authorization', `Bearer ${token}`)
+      .set('Cookie', `csrfToken=${csrf}`)
+      .set('x-csrf-token', csrf);
     expect(res.status).toBe(202);
   });
 
