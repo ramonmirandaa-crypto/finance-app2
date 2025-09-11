@@ -2,9 +2,8 @@
   "name": "finai",
   "version": "1.0.0",
   "description": "Aplicação de finanças pessoais para FinAI.",
-  "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js",
+    "start": "npm --prefix apps/api start",
     "test": "npm run test:api && npm run test:web",
     "test:api": "npm --prefix apps/api test",
     "test:web": "npm --prefix apps/web test"
