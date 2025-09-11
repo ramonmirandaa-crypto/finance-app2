@@ -182,6 +182,35 @@ async function ensureSchema() {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS pluggy_accounts (
+      id TEXT PRIMARY KEY,
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      item_id TEXT REFERENCES pluggy_items(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      type TEXT,
+      number TEXT,
+      agency TEXT,
+      balance NUMERIC,
+      currency TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS pluggy_transactions (
+      id TEXT PRIMARY KEY,
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      item_id TEXT REFERENCES pluggy_items(id) ON DELETE CASCADE,
+      account_id TEXT REFERENCES pluggy_accounts(id) ON DELETE CASCADE,
+      description TEXT,
+      amount NUMERIC,
+      currency TEXT,
+      date DATE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS categories (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -712,6 +741,46 @@ app.post("/pluggy/items", authMiddleware, async (req, res) => {
         item.error ? item.error.message : null,
       ]
     );
+    const accountsResp = await pluggy.fetchAccounts(item.id);
+    const accounts = accountsResp.results || accountsResp;
+    for (const acc of accounts) {
+      const balance = acc.balance && typeof acc.balance === 'object' ? acc.balance.current : acc.balance;
+      await pool.query(
+        `INSERT INTO pluggy_accounts (id, user_id, item_id, name, type, number, agency, balance, currency)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+           ON CONFLICT(id) DO UPDATE SET name = EXCLUDED.name, type = EXCLUDED.type, number = EXCLUDED.number, agency = EXCLUDED.agency, balance = EXCLUDED.balance, currency = EXCLUDED.currency`,
+        [
+          acc.id,
+          req.user.sub,
+          item.id,
+          acc.name,
+          acc.type,
+          acc.number || null,
+          acc.branchNumber || acc.agency || null,
+          balance,
+          acc.currencyCode || acc.currency || null,
+        ]
+      );
+    }
+    const txResp = await pluggy.fetchTransactions(item.id);
+    const txs = txResp.results || txResp;
+    for (const tx of txs) {
+      await pool.query(
+        `INSERT INTO pluggy_transactions (id, user_id, item_id, account_id, description, amount, currency, date)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+           ON CONFLICT(id) DO UPDATE SET account_id = EXCLUDED.account_id, description = EXCLUDED.description, amount = EXCLUDED.amount, currency = EXCLUDED.currency, date = EXCLUDED.date`,
+        [
+          tx.id,
+          req.user.sub,
+          item.id,
+          tx.accountId,
+          tx.description,
+          tx.amount,
+          tx.currencyCode || tx.currency,
+          tx.date,
+        ]
+      );
+    }
     res
       .status(201)
       .json({
@@ -743,14 +812,77 @@ app.get("/pluggy/items", authMiddleware, async (req, res) => {
   res.json({ items: rows });
 });
 
+app.get("/pluggy/accounts", authMiddleware, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id, item_id AS "itemId", name, type, number, agency, balance, currency
+       FROM pluggy_accounts
+       WHERE user_id = $1
+       ORDER BY name`,
+    [req.user.sub]
+  );
+  res.json({ accounts: rows });
+});
+
+app.get("/pluggy/transactions", authMiddleware, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id, item_id AS "itemId", account_id AS "accountId", description, amount, currency, date
+       FROM pluggy_transactions
+       WHERE user_id = $1
+       ORDER BY date DESC`,
+    [req.user.sub]
+  );
+  res.json({ transactions: rows });
+});
+
 app.post("/pluggy/items/:id/sync", authMiddleware, async (req, res) => {
   try {
     await pluggy.updateItem(req.params.id);
+    const item = await pluggy.fetchItem(req.params.id);
+    const accountsResp = await pluggy.fetchAccounts(req.params.id);
+    const accounts = accountsResp.results || accountsResp;
+    for (const acc of accounts) {
+      const balance = acc.balance && typeof acc.balance === 'object' ? acc.balance.current : acc.balance;
+      await pool.query(
+        `INSERT INTO pluggy_accounts (id, user_id, item_id, name, type, number, agency, balance, currency)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+           ON CONFLICT(id) DO UPDATE SET name = EXCLUDED.name, type = EXCLUDED.type, number = EXCLUDED.number, agency = EXCLUDED.agency, balance = EXCLUDED.balance, currency = EXCLUDED.currency`,
+        [
+          acc.id,
+          req.user.sub,
+          req.params.id,
+          acc.name,
+          acc.type,
+          acc.number || null,
+          acc.branchNumber || acc.agency || null,
+          balance,
+          acc.currencyCode || acc.currency || null,
+        ]
+      );
+    }
+    const txResp = await pluggy.fetchTransactions(req.params.id);
+    const txs = txResp.results || txResp;
+    for (const tx of txs) {
+      await pool.query(
+        `INSERT INTO pluggy_transactions (id, user_id, item_id, account_id, description, amount, currency, date)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+           ON CONFLICT(id) DO UPDATE SET account_id = EXCLUDED.account_id, description = EXCLUDED.description, amount = EXCLUDED.amount, currency = EXCLUDED.currency, date = EXCLUDED.date`,
+        [
+          tx.id,
+          req.user.sub,
+          req.params.id,
+          tx.accountId,
+          tx.description,
+          tx.amount,
+          tx.currencyCode || tx.currency,
+          tx.date,
+        ]
+      );
+    }
     await pool.query(
-      `UPDATE pluggy_items SET status = $1, last_sync = NOW() WHERE id = $2 AND user_id = $3`,
-      ["UPDATING", req.params.id, req.user.sub]
+      `UPDATE pluggy_items SET status = $1, error = $2, last_sync = NOW() WHERE id = $3 AND user_id = $4`,
+      [item.status, item.error ? item.error.message : null, req.params.id, req.user.sub]
     );
-    res.status(202).json({ status: "SYNCING" });
+    res.status(200).json({ status: item.status });
   } catch (e) {
     logger.error(e);
     res.status(500).json({ error: "INTERNAL_ERROR" });
