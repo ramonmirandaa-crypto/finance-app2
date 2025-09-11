@@ -15,6 +15,12 @@ cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env
 ```
 
+Instale também a dependência de segurança:
+
+```bash
+npm install helmet
+```
+
 ### Variáveis de ambiente
 
 | Serviço | Variável | Descrição |
