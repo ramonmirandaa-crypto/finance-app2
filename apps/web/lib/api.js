@@ -199,3 +199,25 @@ export async function verify2fa(token) {
     body: JSON.stringify({ token }),
   });
 }
+
+export async function getLoans() {
+  return apiFetch('/loans');
+}
+
+export async function createLoan(data) {
+  return apiFetch('/loans', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getLoanPayments(id) {
+  return apiFetch(`/loans/${id}/payments`);
+}
+
+export async function createLoanPayment(id, data) {
+  return apiFetch(`/loans/${id}/payments`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}

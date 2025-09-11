@@ -138,6 +138,20 @@ const InvestmentSchema = z.object({
   transactionId: z.string().optional(),
 });
 
+const LoanSchema = z.object({
+  description: z.string(),
+  amount: z.number(),
+  currency: z.string(),
+  interestRate: z.number(),
+  startDate: z.string(),
+  endDate: z.string(),
+});
+
+const LoanPaymentSchema = z.object({
+  amount: z.number(),
+  paidAt: z.string(),
+});
+
 const ReportSchema = z.object({
   name: z.string(),
   data: z.any().optional(),
@@ -810,6 +824,67 @@ app.delete("/investments/:id", authMiddleware, async (req, res) => {
   );
   if (result.rowCount === 0) return res.status(404).json({ error: "NOT_FOUND" });
   res.status(204).send();
+});
+
+// Loans
+app.get("/loans", authMiddleware, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id, description, amount, currency, interest_rate AS "interestRate", start_date AS "startDate", end_date AS "endDate"
+       FROM loans WHERE user_id = $1 ORDER BY created_at DESC`,
+    [req.user.sub]
+  );
+  res.json({ loans: rows });
+});
+
+app.post("/loans", authMiddleware, async (req, res) => {
+  try {
+    const { description, amount, currency, interestRate, startDate, endDate } = await LoanSchema.parseAsync(req.body);
+    const { rows } = await pool.query(
+      `INSERT INTO loans (user_id, description, amount, currency, interest_rate, start_date, end_date)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)
+         RETURNING id, description, amount, currency, interest_rate AS "interestRate", start_date AS "startDate", end_date AS "endDate"`,
+      [req.user.sub, description, amount, currency, interestRate, startDate, endDate]
+    );
+    res.status(201).json({ loan: rows[0] });
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
+    }
+    logger.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+app.get("/loans/:id/payments", authMiddleware, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT p.id, p.loan_id AS "loanId", p.amount, p.paid_at AS "paidAt"
+       FROM loan_payments p
+       JOIN loans l ON p.loan_id = l.id
+       WHERE l.id = $1 AND l.user_id = $2
+       ORDER BY p.paid_at DESC`,
+    [req.params.id, req.user.sub]
+  );
+  res.json({ payments: rows });
+});
+
+app.post("/loans/:id/payments", authMiddleware, async (req, res) => {
+  try {
+    const { amount, paidAt } = await LoanPaymentSchema.parseAsync(req.body);
+    const { rows } = await pool.query(
+      `INSERT INTO loan_payments (loan_id, amount, paid_at)
+         SELECT id, $2, $3 FROM loans WHERE id = $1 AND user_id = $4
+         RETURNING id, loan_id AS "loanId", amount, paid_at AS "paidAt"`,
+      [req.params.id, amount, paidAt, req.user.sub]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: "NOT_FOUND" });
+    res.status(201).json({ payment: rows[0] });
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
+    }
+    logger.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
 });
 
 // Reports
