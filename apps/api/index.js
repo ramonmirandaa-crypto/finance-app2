@@ -8,6 +8,7 @@ import { z } from "zod";
 import rateLimit from "express-rate-limit";
 import logger from "./logger.js";
 import { createRequire } from "module";
+import crypto from "crypto";
 
 dotenv.config();
 const require = createRequire(import.meta.url);
@@ -20,8 +21,14 @@ const pluggy = new Pluggy({
 });
 
 const app = express();
-app.use(express.json());
-app.use(require('pino-http')({ logger }));
+app.use(
+  express.json({
+    verify: (req, _res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
+app.use(require("pino-http")({ logger }));
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -493,6 +500,20 @@ app.post("/pluggy/items/:id/sync", authMiddleware, async (req, res) => {
 });
 
 app.post("/pluggy/webhook", async (req, res) => {
+  const signature = req.get("x-pluggy-signature");
+  const secret = process.env.PLUGGY_WEBHOOK_SECRET || "";
+  const expected = crypto
+    .createHmac("sha256", secret)
+    .update(req.rawBody || "")
+    .digest("base64");
+  if (
+    !signature ||
+    signature.length !== expected.length ||
+    !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
+  ) {
+    return res.status(401).json({ error: "INVALID_SIGNATURE" });
+  }
+
   const { itemId } = req.body || {};
   if (!itemId) return res.status(400).json({ error: "INVALID_BODY" });
   try {
