@@ -42,7 +42,7 @@ describe('Cards routes', () => {
     const res = await request(app)
       .post('/cards')
       .set('Authorization', `Bearer ${token}`)
-      .send({ number: '4111111111111111', expiration: '12/25', cvc: '123', limit: 500 });
+      .send({ number: '4111111111111111', expiration: '12/25', limit: 500 });
 
     expect(res.status).toBe(201);
     expect(res.body.card.id).toBe('c1');

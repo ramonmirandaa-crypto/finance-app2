@@ -73,7 +73,6 @@ const AccountSchema = z.object({
 const CardSchema = z.object({
   number: z.string(),
   expiration: z.string(),
-  cvc: z.string(),
   limit: z.number(),
 });
 
@@ -112,11 +111,11 @@ async function ensureSchema() {
       user_id UUID REFERENCES users(id) ON DELETE CASCADE,
       card_number BYTEA NOT NULL,
       expiration TEXT NOT NULL,
-      cvc BYTEA NOT NULL,
       card_limit NUMERIC NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+  await pool.query("ALTER TABLE cards DROP COLUMN IF EXISTS cvc;");
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS pluggy_connectors (
@@ -144,6 +143,8 @@ function signToken(user) {
 }
 
 function getTokenFromCookies(req) {
+  const auth = req.headers.authorization || "";
+  if (auth.startsWith("Bearer ")) return auth.slice(7);
   const cookie = req.headers.cookie || "";
   const match = cookie
     .split(";")
@@ -180,7 +181,7 @@ app.post("/auth/register", authLimiter, async (req, res) => {
     const user = rows[0];
     const token = signToken(user);
     res.cookie('token', token, { httpOnly: true, secure: true });
-    res.status(201).json({ user });
+    res.status(201).json({ user, token });
   } catch (e) {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
@@ -204,7 +205,7 @@ app.post("/auth/login", authLimiter, async (req, res) => {
     if (!ok) return res.status(401).json({ error: "INVALID_CREDENTIALS" });
     const token = signToken(user);
     res.cookie('token', token, { httpOnly: true, secure: true });
-    res.json({ user: { id: user.id, name: user.name, email: user.email } });
+    res.json({ user: { id: user.id, name: user.name, email: user.email }, token });
   } catch (e) {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
@@ -333,19 +334,18 @@ app.get("/cards", authMiddleware, async (req, res) => {
 
 app.post("/cards", authMiddleware, async (req, res) => {
   try {
-    const { number, expiration, cvc, limit } = await CardSchema.parseAsync(req.body);
+    const { number, expiration, limit } = await CardSchema.parseAsync(req.body);
     const { rows } = await pool.query(
-      `INSERT INTO cards (user_id, card_number, expiration, cvc, card_limit)
+      `INSERT INTO cards (user_id, card_number, expiration, card_limit)
          VALUES ($1,
-                 pgp_sym_encrypt($2, $6, 'cipher-algo=aes256'),
+                 pgp_sym_encrypt($2, $5, 'cipher-algo=aes256'),
                  $3,
-                 digest($4, 'sha256'),
-                 $5)
+                 $4)
        RETURNING id,
-                 RIGHT(pgp_sym_decrypt(card_number, $6), 4) AS number,
+                 RIGHT(pgp_sym_decrypt(card_number, $5), 4) AS number,
                  expiration,
                  card_limit AS limit`,
-      [req.user.sub, number, expiration, cvc, limit, ENC_KEY]
+      [req.user.sub, number, expiration, limit, ENC_KEY]
     );
     res.status(201).json({ card: rows[0] });
   } catch (e) {
@@ -374,15 +374,14 @@ app.get("/cards/:id", authMiddleware, async (req, res) => {
 
 app.put("/cards/:id", authMiddleware, async (req, res) => {
   try {
-    const { number, expiration, cvc, limit } = await CardSchema.parseAsync(req.body);
+    const { number, expiration, limit } = await CardSchema.parseAsync(req.body);
     const result = await pool.query(
       `UPDATE cards SET
-         card_number = pgp_sym_encrypt($3, $7, 'cipher-algo=aes256'),
+         card_number = pgp_sym_encrypt($3, $6, 'cipher-algo=aes256'),
          expiration = $4,
-         cvc = digest($5, 'sha256'),
-         card_limit = $6
+         card_limit = $5
        WHERE id = $1 AND user_id = $2`,
-      [req.params.id, req.user.sub, number, expiration, cvc, limit, ENC_KEY]
+      [req.params.id, req.user.sub, number, expiration, limit, ENC_KEY]
     );
     if (result.rowCount === 0) return res.status(404).json({ error: "NOT_FOUND" });
     const { rows } = await pool.query(
