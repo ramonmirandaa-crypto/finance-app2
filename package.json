@@ -7,7 +7,7 @@
     "start": "node apps/api/index.js",
     "test": "npm --prefix apps/api test",
     "e2e": "cypress run",
-    "backup": "node scripts/backup.js"
+    "backup": "node scripts/backup.mjs"
   },
   "author": "Ramon Miranda",
   "license": "ISC",

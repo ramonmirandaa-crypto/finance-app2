@@ -1,6 +1,7 @@
 import { exec } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { google } from 'googleapis';
 import cron from 'node-cron';
 
@@ -69,7 +70,7 @@ async function cleanupOld() {
   await Promise.all(deletions);
 }
 
-async function runBackup() {
+export async function runBackup() {
   try {
     const dump = await createDump();
     await uploadFile(dump);
@@ -81,9 +82,12 @@ async function runBackup() {
   }
 }
 
-if (CRON_SCHEDULE) {
-  cron.schedule(CRON_SCHEDULE, runBackup);
-  console.log(`Backup scheduled with "${CRON_SCHEDULE}"`);
-} else {
-  runBackup();
+const isCLI = process.argv[1] === fileURLToPath(import.meta.url);
+if (isCLI) {
+  if (CRON_SCHEDULE) {
+    cron.schedule(CRON_SCHEDULE, runBackup);
+    console.log(`Backup scheduled with "${CRON_SCHEDULE}"`);
+  } else {
+    runBackup();
+  }
 }
