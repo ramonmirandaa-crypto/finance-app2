@@ -18,10 +18,18 @@ import QRCode from "qrcode";
 
 dotenv.config();
 if (!process.env.JWT_SECRET) {
-  throw new Error("JWT_SECRET is not defined");
+  if (process.env.NODE_ENV === 'test') {
+    process.env.JWT_SECRET = 'devsecret';
+  } else {
+    throw new Error("JWT_SECRET is not defined");
+  }
 }
 if (!process.env.DATA_ENCRYPTION_KEY) {
-  throw new Error("DATA_ENCRYPTION_KEY is not defined");
+  if (process.env.NODE_ENV === 'test') {
+    process.env.DATA_ENCRYPTION_KEY = 'testkey';
+  } else {
+    throw new Error("DATA_ENCRYPTION_KEY is not defined");
+  }
 }
 const require = createRequire(import.meta.url);
 const { Pool } = pkg;
@@ -142,6 +150,36 @@ const BudgetSchema = z.object({
   currency: z.string(),
   transactionId: z.string().optional(),
 });
+// Notifications
+async function createNotification(userId, type, message) {
+  await pool.query(
+    `INSERT INTO notifications (user_id, type, message) VALUES ($1,$2,$3)`,
+    [userId, type, message]
+  );
+}
+
+async function checkBudget(userId, categoryId) {
+  if (!categoryId) return;
+  const { rows: budgets } = await pool.query(
+    `SELECT id, amount FROM budgets WHERE user_id = $1 AND category_id = $2`,
+    [userId, categoryId]
+  );
+  if (budgets.length === 0) return;
+  const { rows } = await pool.query(
+    `SELECT COALESCE(SUM(amount),0) AS total FROM transactions WHERE user_id = $1 AND category_id = $2`,
+    [userId, categoryId]
+  );
+  const total = Number(rows[0]?.total) || 0;
+  for (const b of budgets) {
+    if (total > Number(b.amount)) {
+      await createNotification(
+        userId,
+        'budget_exceeded',
+        'Orçamento excedido'
+      );
+    }
+  }
+}
 
 const GoalSchema = z.object({
   name: z.string(),
@@ -381,6 +419,22 @@ app.delete("/auth/2fa", authMiddleware, async (req, res) => {
 app.get("/me", authMiddleware, async (req, res) => {
   const { rows } = await pool.query("SELECT id, name, email, created_at FROM users WHERE id = $1", [req.user.sub]);
   res.json({ user: rows[0] || null });
+});
+
+app.get("/notifications", authMiddleware, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id, type, message, read_at AS "readAt" FROM notifications WHERE user_id = $1 ORDER BY created_at DESC`,
+    [req.user.sub]
+  );
+  res.json({ notifications: rows });
+});
+
+app.post("/notifications/:id/read", authMiddleware, async (req, res) => {
+  await pool.query(
+    `UPDATE notifications SET read_at = NOW() WHERE id = $1 AND user_id = $2`,
+    [req.params.id, req.user.sub]
+  );
+  res.json({});
 });
 
 // Accounts CRUD
@@ -624,6 +678,7 @@ app.post("/transactions", authMiddleware, async (req, res) => {
                    pgp_sym_decrypt(description, $9) AS description`,
       [req.user.sub, accountId, categoryId, type, amount, currency, date, description, ENC_KEY]
     );
+    await checkBudget(req.user.sub, categoryId);
     res.status(201).json({ transaction: rows[0] });
   } catch (e) {
     if (e instanceof z.ZodError) {
@@ -1252,12 +1307,13 @@ app.post("/pluggy/items/:id/sync", authMiddleware, async (req, res) => {
         ]
       );
     }
-    await pool.query(
-      `UPDATE pluggy_items SET status = $1, error = $2, last_sync = NOW() WHERE id = $3 AND user_id = $4`,
-      [item.status, item.error ? item.error.message : null, req.params.id, req.user.sub]
-    );
-    res.status(200).json({ status: item.status });
-  } catch (e) {
+      await pool.query(
+        `UPDATE pluggy_items SET status = $1, error = $2, last_sync = NOW() WHERE id = $3 AND user_id = $4`,
+        [item.status, item.error ? item.error.message : null, req.params.id, req.user.sub]
+      );
+      await createNotification(req.user.sub, 'pluggy_sync', 'Sincronização Pluggy concluída');
+      res.status(200).json({ status: item.status });
+    } catch (e) {
     logger.error(e);
     res.status(500).json({ error: "INTERNAL_ERROR" });
   }
@@ -1323,6 +1379,7 @@ async function processRecurrings() {
            VALUES ($1,$2,$3,$4,$5,$6,$7, pgp_sym_encrypt($8,$9,'cipher-algo=aes256'))`,
         [r.user_id, r.account_id, r.category_id, r.type, r.amount, r.currency, r.next_occurrence, r.description, ENC_KEY]
       );
+      await checkBudget(r.user_id, r.category_id);
       await pool.query(
         `UPDATE recurrings SET next_occurrence = next_occurrence + interval_days * INTERVAL '1 day'
            WHERE id = $1`,

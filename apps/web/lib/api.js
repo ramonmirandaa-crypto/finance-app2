@@ -265,3 +265,11 @@ export async function updateSubscription(id, data) {
 export async function deleteSubscription(id) {
   return apiFetch(`/subscriptions/${id}`, { method: 'DELETE' });
 }
+
+export async function getNotifications() {
+  return apiFetch('/notifications');
+}
+
+export async function markNotificationRead(id) {
+  return apiFetch(`/notifications/${id}/read`, { method: 'POST' });
+}
