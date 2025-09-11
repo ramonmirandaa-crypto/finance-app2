@@ -6,6 +6,8 @@ FinAI é uma aplicação para gestão de finanças.
 Copie os arquivos `.env.example` para `.env` dentro de `apps/api` e `apps/web`
 ou defina as variáveis equivalentes no Portainer Stack.
 
+As migrações do banco de dados usam `knexfile.js`, que lê as variáveis `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` e `DB_PASSWORD`.
+
 ### API (`apps/api`)
 
 ```env
