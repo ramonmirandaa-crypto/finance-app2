@@ -30,6 +30,7 @@ cp apps/web/.env.example apps/web/.env
 | API | PLUGGY_CLIENT_SECRET | Client Secret do Pluggy |
 | API | PLUGGY_BASE_URL | URL base da API do Pluggy |
 | API | LOG_LEVEL | Nível de log da API |
+| API | JWT_SECRET | Segredo para assinar tokens JWT |
 | Web | NEXT_PUBLIC_API_URL | URL base da API consumida pelo frontend |
 | Backup | PGHOST | Host do banco PostgreSQL (padrão `localhost`) |
 | Backup | PGPORT | Porta do PostgreSQL (padrão `5432`) |
