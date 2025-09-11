@@ -37,6 +37,7 @@ const knexClient = knex(knexConfig);
 const app = express();
 app.use(
   express.json({
+    limit: process.env.JSON_LIMIT || '1mb', // adjust if large payloads are expected
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },
