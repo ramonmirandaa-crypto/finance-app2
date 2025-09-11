@@ -37,7 +37,7 @@ npm install helmet
 | API | PLUGGY_BASE_URL | URL base da API do Pluggy |
 | API | LOG_LEVEL | Nível de log da API |
 | API | JWT_SECRET | Chave secreta usada na assinatura de tokens JWT para autenticação |
-| API | NODE_ENV | Ambiente da aplicação (`development` ou `production`) |
+| API | NODE_ENV | Ambiente da aplicação (`development` ou `production`); em `production` os cookies usam `secure` e exigem HTTPS |
 | Web | NEXT_PUBLIC_API_URL | URL base da API consumida pelo frontend |
 | Backup | PGHOST | Host do banco PostgreSQL (padrão `localhost`) |
 | Backup | PGPORT | Porta do PostgreSQL (padrão `5432`) |
@@ -51,6 +51,8 @@ npm install helmet
 | Backup | GOOGLE_REFRESH_TOKEN | Refresh token autorizado |
 | Backup | BACKUP_RETENTION_DAYS | Dias de retenção dos backups no Drive (padrão `7`) |
 | Backup | CRON_SCHEDULE | Expressão cron para agendar o backup |
+
+Quando `NODE_ENV` está definido como `production`, a API marca os cookies de autenticação com `secure`, exigindo HTTPS.
 
 Para detalhes sobre a geração e restauração de backups, consulte [docs/backup.md](docs/backup.md).
 
