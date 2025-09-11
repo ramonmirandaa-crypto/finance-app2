@@ -1,7 +1,7 @@
 {
-  "name": "finance-app",
+  "name": "finai",
   "version": "1.0.0",
-  "description": "Aplicação de finanças pessoais para Ramon Miranda.",
+  "description": "Aplicação de finanças pessoais para FinAI.",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
