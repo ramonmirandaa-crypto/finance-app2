@@ -1,6 +1,12 @@
 "use client";
 import { useState, useEffect } from "react";
-import { apiFetch, convertCurrency } from "../../../lib/api";
+import {
+  createInvestment,
+  getInvestments,
+  updateInvestment,
+  deleteInvestment,
+  convertCurrency,
+} from "../../../lib/api";
 
 export default function Page() {
   const [description, setDescription] = useState("");
@@ -9,24 +15,24 @@ export default function Page() {
   const [displayCurrency, setDisplayCurrency] = useState("BRL");
   const [converted, setConverted] = useState("");
   const [transactionId, setTransactionId] = useState("");
+  const [investments, setInvestments] = useState([]);
   const [msg, setMsg] = useState("");
 
   async function onSubmit(e) {
     e.preventDefault();
     setMsg("Salvando...");
     try {
-      await apiFetch("/investments", {
-        method: "POST",
-        body: JSON.stringify({
-          description,
-          amount: Number(amount),
-          currency,
-          transactionId: transactionId || undefined,
-        }),
+      await createInvestment({
+        description,
+        amount: Number(amount),
+        currency,
+        transactionId: transactionId || undefined,
       });
       setDescription("");
       setAmount("");
       setTransactionId("");
+      const data = await getInvestments();
+      setInvestments(data.investments);
       setMsg("Investimento registrado");
     } catch (e) {
       setMsg("Erro ao salvar");
@@ -42,6 +48,44 @@ export default function Page() {
       .then((v) => setConverted(v.toFixed(2)))
       .catch(() => setConverted(""));
   }, [amount, currency, displayCurrency]);
+
+  useEffect(() => {
+    getInvestments()
+      .then((data) => setInvestments(data.investments))
+      .catch(() => {});
+  }, []);
+
+  function handleInvestmentChange(index, field, value) {
+    setInvestments((prev) =>
+      prev.map((inv, i) => (i === index ? { ...inv, [field]: value } : inv))
+    );
+  }
+
+  async function saveInvestment(inv) {
+    setMsg("Atualizando...");
+    try {
+      await updateInvestment(inv.id, {
+        description: inv.description,
+        amount: Number(inv.amount),
+        currency: inv.currency,
+        transactionId: inv.transactionId || undefined,
+      });
+      setMsg("Investimento atualizado");
+    } catch (e) {
+      setMsg("Erro ao atualizar");
+    }
+  }
+
+  async function removeInvestment(id) {
+    setMsg("Removendo...");
+    try {
+      await deleteInvestment(id);
+      setInvestments((prev) => prev.filter((i) => i.id !== id));
+      setMsg("Investimento removido");
+    } catch (e) {
+      setMsg("Erro ao remover");
+    }
+  }
 
   return (
     <section
@@ -137,6 +181,74 @@ export default function Page() {
         </button>
         <p style={{ minHeight: 20, fontSize: 13 }}>{msg}</p>
       </form>
+      <hr />
+      {investments.map((inv, idx) => (
+        <div key={inv.id} style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <input
+            value={inv.description}
+            onChange={(e) =>
+              handleInvestmentChange(idx, "description", e.target.value)
+            }
+            style={{
+              padding: 6,
+              borderRadius: 8,
+              border: "1px solid #cbd5e1",
+            }}
+          />
+          <input
+            type="number"
+            step="0.01"
+            value={inv.amount}
+            onChange={(e) =>
+              handleInvestmentChange(idx, "amount", e.target.value)
+            }
+            style={{
+              padding: 6,
+              borderRadius: 8,
+              border: "1px solid #cbd5e1",
+            }}
+          />
+          <select
+            value={inv.currency}
+            onChange={(e) =>
+              handleInvestmentChange(idx, "currency", e.target.value)
+            }
+            style={{
+              padding: 6,
+              borderRadius: 8,
+              border: "1px solid #cbd5e1",
+            }}
+          >
+            <option value="BRL">BRL</option>
+            <option value="USD">USD</option>
+            <option value="EUR">EUR</option>
+          </select>
+          <input
+            value={inv.transactionId || ""}
+            onChange={(e) =>
+              handleInvestmentChange(idx, "transactionId", e.target.value)
+            }
+            placeholder="ID da transação"
+            style={{
+              padding: 6,
+              borderRadius: 8,
+              border: "1px solid #cbd5e1",
+            }}
+          />
+          <button
+            onClick={() => saveInvestment(inv)}
+            style={{ padding: 6, borderRadius: 8, cursor: "pointer" }}
+          >
+            Atualizar
+          </button>
+          <button
+            onClick={() => removeInvestment(inv.id)}
+            style={{ padding: 6, borderRadius: 8, cursor: "pointer" }}
+          >
+            Remover
+          </button>
+        </div>
+      ))}
     </section>
   );
 }

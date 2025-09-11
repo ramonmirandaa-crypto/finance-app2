@@ -586,6 +586,35 @@ app.post("/budgets", authMiddleware, async (req, res) => {
   }
 });
 
+app.put("/budgets/:id", authMiddleware, async (req, res) => {
+  try {
+    const { categoryId, amount, currency, transactionId } = await BudgetSchema.parseAsync(req.body);
+    const { rows } = await pool.query(
+      `UPDATE budgets SET category_id = $3, amount = $4, currency = $5, pluggy_transaction_id = $6
+         WHERE id = $1 AND user_id = $2
+         RETURNING id, category_id AS "categoryId", amount, currency, pluggy_transaction_id AS "transactionId"`,
+      [req.params.id, req.user.sub, categoryId, amount, currency, transactionId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: "NOT_FOUND" });
+    res.json({ budget: rows[0] });
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
+    }
+    logger.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+app.delete("/budgets/:id", authMiddleware, async (req, res) => {
+  const result = await pool.query(
+    "DELETE FROM budgets WHERE id = $1 AND user_id = $2",
+    [req.params.id, req.user.sub]
+  );
+  if (result.rowCount === 0) return res.status(404).json({ error: "NOT_FOUND" });
+  res.status(204).send();
+});
+
 // Goals
 app.get("/goals", authMiddleware, async (req, res) => {
   const { rows } = await pool.query(
@@ -615,6 +644,35 @@ app.post("/goals", authMiddleware, async (req, res) => {
   }
 });
 
+app.put("/goals/:id", authMiddleware, async (req, res) => {
+  try {
+    const { name, target, currency, deadline, transactionId } = await GoalSchema.parseAsync(req.body);
+    const { rows } = await pool.query(
+      `UPDATE goals SET name = $3, target = $4, currency = $5, deadline = $6, pluggy_transaction_id = $7
+         WHERE id = $1 AND user_id = $2
+         RETURNING id, name, target, currency, deadline, pluggy_transaction_id AS "transactionId"`,
+      [req.params.id, req.user.sub, name, target, currency, deadline, transactionId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: "NOT_FOUND" });
+    res.json({ goal: rows[0] });
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
+    }
+    logger.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+app.delete("/goals/:id", authMiddleware, async (req, res) => {
+  const result = await pool.query(
+    "DELETE FROM goals WHERE id = $1 AND user_id = $2",
+    [req.params.id, req.user.sub]
+  );
+  if (result.rowCount === 0) return res.status(404).json({ error: "NOT_FOUND" });
+  res.status(204).send();
+});
+
 // Investments
 app.get("/investments", authMiddleware, async (req, res) => {
   const { rows } = await pool.query(
@@ -642,6 +700,35 @@ app.post("/investments", authMiddleware, async (req, res) => {
     logger.error(e);
     res.status(500).json({ error: "INTERNAL_ERROR" });
   }
+});
+
+app.put("/investments/:id", authMiddleware, async (req, res) => {
+  try {
+    const { description, amount, currency, transactionId } = await InvestmentSchema.parseAsync(req.body);
+    const { rows } = await pool.query(
+      `UPDATE investments SET description = $3, amount = $4, currency = $5, pluggy_transaction_id = $6
+         WHERE id = $1 AND user_id = $2
+         RETURNING id, description, amount, currency, pluggy_transaction_id AS "transactionId"`,
+      [req.params.id, req.user.sub, description, amount, currency, transactionId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: "NOT_FOUND" });
+    res.json({ investment: rows[0] });
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
+    }
+    logger.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+app.delete("/investments/:id", authMiddleware, async (req, res) => {
+  const result = await pool.query(
+    "DELETE FROM investments WHERE id = $1 AND user_id = $2",
+    [req.params.id, req.user.sub]
+  );
+  if (result.rowCount === 0) return res.status(404).json({ error: "NOT_FOUND" });
+  res.status(204).send();
 });
 
 // Reports
