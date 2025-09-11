@@ -60,6 +60,8 @@ Para detalhes sobre a geração e restauração de backups, consulte [docs/backu
 
 A API expõe endpoints REST para gerenciar usuários, contas bancárias e cartões.
 
+- `POST /auth/logout` para encerrar a sessão limpando os cookies de autenticação.
+
 - `GET /accounts`, `POST /accounts`, `GET /accounts/:id`, `PUT /accounts/:id`, `DELETE /accounts/:id`
 - `GET /cards`, `POST /cards`, `GET /cards/:id`, `PUT /cards/:id`, `DELETE /cards/:id`
 

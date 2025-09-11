@@ -1,12 +1,14 @@
 'use client';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '../lib/api';
+import { auth } from '../lib/auth';
 
 export default function Topbar({ user }) {
   const router = useRouter();
 
   async function sair() {
     await apiFetch('/auth/logout', { method: 'POST' });
+    auth.clear();
     router.replace('/login');
   }
 

@@ -95,4 +95,15 @@ describe('Authentication routes', () => {
     expect(res.status).toBe(200);
     expect(res.body.token).toBeDefined();
   });
+
+  test('logout clears cookies and returns 204', async () => {
+    const res = await request(app).post('/auth/logout');
+    expect(res.status).toBe(204);
+    expect(res.headers['set-cookie']).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('token=;'),
+        expect.stringContaining('csrfToken=;'),
+      ])
+    );
+  });
 });
