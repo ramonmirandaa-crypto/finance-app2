@@ -54,6 +54,14 @@ export async function syncPluggyItem(id) {
   return apiFetch(`/pluggy/items/${id}/sync`, { method: 'POST' });
 }
 
+export async function getPluggyAccounts() {
+  return apiFetch('/pluggy/accounts');
+}
+
+export async function getPluggyTransactions() {
+  return apiFetch('/pluggy/transactions');
+}
+
 export async function getCategories() {
   return apiFetch('/categories');
 }
