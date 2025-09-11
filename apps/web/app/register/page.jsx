@@ -15,11 +15,11 @@ export default function RegisterPage() {
     e.preventDefault();
     setMsg('Criando conta...');
     try {
-      const data = await apiFetch('/auth/register', {
+      await apiFetch('/auth/register', {
         method: 'POST',
         body: JSON.stringify({ name: nome, email, password: senha })
       });
-      auth.save(data.token);
+      auth.save();
       router.replace('/dashboard');
     } catch (e) {
       setMsg(e?.data?.error || 'Falha no registro');

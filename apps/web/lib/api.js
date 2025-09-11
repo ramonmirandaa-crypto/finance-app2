@@ -1,5 +1,7 @@
 const BASE = process.env.NEXT_PUBLIC_API_URL;
 
+// All authentication tokens are managed via httpOnly cookies. Endpoints such as
+// login/register no longer include a token in their JSON responses.
 export async function apiFetch(path, options = {}) {
   const headers = {
     'Content-Type': 'application/json',

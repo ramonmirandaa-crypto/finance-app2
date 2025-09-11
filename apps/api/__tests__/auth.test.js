@@ -26,7 +26,7 @@ describe('Authentication routes', () => {
 
     expect(res.status).toBe(201);
     expect(res.body.user).toEqual({ id: '1', name: 'Alice', email: 'alice@example.com', created_at: '2024-01-01' });
-    expect(res.body.token).toBeDefined();
+    expect(res.body.token).toBeUndefined();
   });
 
   test('rejects duplicate email', async () => {
@@ -52,7 +52,7 @@ describe('Authentication routes', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.user.email).toBe('alice@example.com');
-    expect(res.body.token).toBeDefined();
+    expect(res.body.token).toBeUndefined();
   });
 
   test('login fails with invalid credentials', async () => {
@@ -93,7 +93,7 @@ describe('Authentication routes', () => {
       .send({ email: 'alice@example.com', password: 'password123', totp: token });
 
     expect(res.status).toBe(200);
-    expect(res.body.token).toBeDefined();
+    expect(res.body.token).toBeUndefined();
   });
 
   test('logout clears cookies and returns 204', async () => {
