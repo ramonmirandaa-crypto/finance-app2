@@ -2,6 +2,7 @@
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '../lib/api';
 import { auth } from '../lib/auth';
+import NotificationBell from './NotificationBell.jsx';
 
 export default function Topbar({ user }) {
   const router = useRouter();
@@ -28,6 +29,7 @@ export default function Topbar({ user }) {
     }}>
       <div style={{fontWeight: 700}}>Finance App</div>
       <div style={{display:'flex', gap:12, alignItems:'center'}}>
+        <NotificationBell />
         <span style={{fontSize:14, opacity:0.8}}>
           {user?.name ? `Olá, ${user.name}` : ''}
         </span>
