@@ -11,11 +11,15 @@ export default function Page() {
   const load = () => getPluggyItems().then((d) => setItems(d.items));
 
   useEffect(() => {
-    if (!auth.isAuthenticated()) {
-      router.replace('/login');
-      return;
-    }
-    load().catch(() => router.replace('/login'));
+    const init = async () => {
+      try {
+        await auth.getUser();
+        await load();
+      } catch (e) {
+        if (e.status === 401) router.replace('/login');
+      }
+    };
+    init();
   }, [router]);
 
   const connect = async () => {
