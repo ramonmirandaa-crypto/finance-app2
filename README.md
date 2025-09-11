@@ -15,6 +15,8 @@ cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env
 ```
 
+Antes de executar `docker-compose up`, defina uma chave para `DATA_ENCRYPTION_KEY` no arquivo `apps/api/.env`; sem esse valor a API não inicia.
+
 Instale também a dependência de segurança:
 
 ```bash
