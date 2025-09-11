@@ -17,6 +17,12 @@ import knexConfig from "./knexfile.js";
 import QRCode from "qrcode";
 
 dotenv.config();
+if (!process.env.JWT_SECRET) {
+  throw new Error("JWT_SECRET is not defined");
+}
+if (!process.env.DATA_ENCRYPTION_KEY) {
+  throw new Error("DATA_ENCRYPTION_KEY is not defined");
+}
 const require = createRequire(import.meta.url);
 const { Pool } = pkg;
 const knexClient = knex(knexConfig);
@@ -65,7 +71,7 @@ const pool = new Pool({
   password: process.env.DB_PASSWORD || "postgres",
 });
 
-const ENC_KEY = process.env.DATA_ENCRYPTION_KEY || "devkey";
+const ENC_KEY = process.env.DATA_ENCRYPTION_KEY;
 
 const RegisterSchema = z.object({
   name: z.string(),
@@ -133,7 +139,7 @@ const PluggyItemSchema = z.object({
 
 function signToken(user) {
   const payload = { sub: user.id, name: user.name, email: user.email };
-  return jwt.sign(payload, process.env.JWT_SECRET || "devsecret", { expiresIn: "7d" });
+  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "7d" });
 }
 
 function getCookie(req, name) {
@@ -155,7 +161,7 @@ function authMiddleware(req, res, next) {
   const token = getToken(req);
   if (!token) return res.status(401).json({ error: "TOKEN_MISSING" });
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "devsecret");
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded;
   } catch {
     return res.status(401).json({ error: "TOKEN_INVALID" });
