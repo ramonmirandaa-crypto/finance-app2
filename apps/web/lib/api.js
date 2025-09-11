@@ -101,6 +101,17 @@ export async function createBudget(data) {
   });
 }
 
+export async function updateBudget(id, data) {
+  return apiFetch(`/budgets/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteBudget(id) {
+  return apiFetch(`/budgets/${id}`, { method: 'DELETE' });
+}
+
 export async function getGoals() {
   return apiFetch('/goals');
 }
@@ -112,6 +123,17 @@ export async function createGoal(data) {
   });
 }
 
+export async function updateGoal(id, data) {
+  return apiFetch(`/goals/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteGoal(id) {
+  return apiFetch(`/goals/${id}`, { method: 'DELETE' });
+}
+
 export async function getInvestments() {
   return apiFetch('/investments');
 }
@@ -121,6 +143,17 @@ export async function createInvestment(data) {
     method: 'POST',
     body: JSON.stringify(data),
   });
+}
+
+export async function updateInvestment(id, data) {
+  return apiFetch(`/investments/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteInvestment(id) {
+  return apiFetch(`/investments/${id}`, { method: 'DELETE' });
 }
 
 export async function getReports() {
