@@ -1,11 +1,13 @@
 "use client";
-import { useState } from "react";
-import { apiFetch } from "../../../lib/api";
+import { useState, useEffect } from "react";
+import { apiFetch, convertCurrency } from "../../../lib/api";
 
 export default function Page() {
   const [name, setName] = useState("");
   const [target, setTarget] = useState("");
   const [currency, setCurrency] = useState("BRL");
+  const [displayCurrency, setDisplayCurrency] = useState("BRL");
+  const [converted, setConverted] = useState("");
   const [deadline, setDeadline] = useState("");
   const [msg, setMsg] = useState("");
 
@@ -30,6 +32,16 @@ export default function Page() {
       setMsg("Erro ao salvar");
     }
   }
+
+  useEffect(() => {
+    if (!target) {
+      setConverted("");
+      return;
+    }
+    convertCurrency(Number(target), currency, displayCurrency)
+      .then((v) => setConverted(v.toFixed(2)))
+      .catch(() => setConverted(""));
+  }, [target, currency, displayCurrency]);
 
   return (
     <section
@@ -81,6 +93,24 @@ export default function Page() {
           <option value="USD">USD</option>
           <option value="EUR">EUR</option>
         </select>
+        <select
+          value={displayCurrency}
+          onChange={(e) => setDisplayCurrency(e.target.value)}
+          style={{
+            padding: 10,
+            borderRadius: 12,
+            border: "1px solid #cbd5e1",
+          }}
+        >
+          <option value="BRL">BRL</option>
+          <option value="USD">USD</option>
+          <option value="EUR">EUR</option>
+        </select>
+        {converted && (
+          <p style={{ fontSize: 13 }}>
+            {`Equivale a ${converted} ${displayCurrency}`}
+          </p>
+        )}
         <input
           type="date"
           value={deadline}

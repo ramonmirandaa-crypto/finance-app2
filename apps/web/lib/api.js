@@ -23,6 +23,16 @@ export async function apiFetch(path, options = {}) {
   return data;
 }
 
+export async function getExchangeRate(base, target) {
+  return apiFetch(`/exchange/${base}/${target}`);
+}
+
+export async function convertCurrency(amount, base, target) {
+  if (base === target) return amount;
+  const { rate } = await getExchangeRate(base, target);
+  return amount * rate;
+}
+
 export async function getMe() {
   return apiFetch('/me');
 }

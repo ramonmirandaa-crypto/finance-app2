@@ -11,6 +11,7 @@ import logger from "./logger.js";
 import { createRequire } from "module";
 import crypto from "crypto";
 import speakeasy from "speakeasy";
+import { getRate } from "./exchange.js";
 import knex from "knex";
 import knexConfig from "./knexfile.js";
 import QRCode from "qrcode";
@@ -314,6 +315,18 @@ function authMiddleware(req, res, next) {
 
 app.get("/", (req, res) => {
   res.json({ status: "🚀 API rodando no TrueNAS!" });
+});
+
+app.get("/exchange/:base/:target", async (req, res) => {
+  try {
+    const rate = await getRate(
+      req.params.base.toUpperCase(),
+      req.params.target.toUpperCase()
+    );
+    res.json({ rate });
+  } catch {
+    res.status(500).json({ error: "EXCHANGE_FAILED" });
+  }
 });
 
 // Registro
