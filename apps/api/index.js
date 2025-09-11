@@ -255,10 +255,10 @@ app.post("/auth/login", authLimiter, async (req, res) => {
   }
 });
 
-app.post("/auth/logout", (req, res) => {
+app.post("/auth/logout", (_req, res) => {
   res.clearCookie("token");
   res.clearCookie("csrfToken");
-  res.json({});
+  res.sendStatus(204);
 });
 
 app.post("/auth/2fa/setup", authMiddleware, async (req, res) => {

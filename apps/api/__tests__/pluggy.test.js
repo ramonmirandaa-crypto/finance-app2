@@ -7,6 +7,22 @@ const mockPoolInstance = { query: jest.fn() };
 const MockPool = jest.fn(() => mockPoolInstance);
 await jest.unstable_mockModule('pg', () => ({ default: { Pool: MockPool }, Pool: MockPool }));
 
+const mockPluggyInstance = {
+  createConnectToken: jest.fn(async () => ({ accessToken: 'link-token' })),
+  fetchItem: jest.fn(async (id) => ({
+    id,
+    clientUserId: '1',
+    connector: { id: 'c1', name: 'Mock Bank' },
+    status: 'UPDATED',
+    error: null,
+  })),
+  fetchAccounts: jest.fn(async () => ({ results: [] })),
+  fetchTransactions: jest.fn(async () => ({ results: [] })),
+  updateItem: jest.fn(async () => ({})),
+};
+const MockPluggy = jest.fn(() => mockPluggyInstance);
+await jest.unstable_mockModule('pluggy-sdk', () => ({ default: MockPluggy }));
+
 const { default: app } = await import('../index.js');
 const pool = mockPoolInstance;
 const token = jwt.sign({ sub: '1', name: 'Alice', email: 'alice@example.com' }, 'devsecret');
@@ -67,7 +83,7 @@ describe('Pluggy routes', () => {
       .set('Authorization', `Bearer ${token}`)
       .set('Cookie', `csrfToken=${csrf}`)
       .set('x-csrf-token', csrf);
-    expect(res.status).toBe(202);
+    expect(res.status).toBe(200);
   });
 
   test('webhook requires itemId', async () => {

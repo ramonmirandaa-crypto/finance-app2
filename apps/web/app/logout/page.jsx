@@ -2,12 +2,21 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth } from '../../lib/auth';
+import { apiFetch } from '../../lib/api';
 
 export default function LogoutPage() {
   const router = useRouter();
   useEffect(() => {
-    auth.clear();
-    router.replace('/login');
+    async function doLogout() {
+      try {
+        await apiFetch('/auth/logout', { method: 'POST' });
+      } catch (e) {
+        // ignore errors
+      }
+      auth.clear();
+      router.replace('/login');
+    }
+    doLogout();
   }, [router]);
   return null;
 }
