@@ -277,27 +277,36 @@ function signToken(user) {
   return jwt.sign(payload, process.env.JWT_SECRET || "devsecret", { expiresIn: "7d" });
 }
 
-function getTokenFromCookies(req) {
-  const auth = req.headers.authorization || "";
-  if (auth.startsWith("Bearer ")) return auth.slice(7);
+function getCookie(req, name) {
   const cookie = req.headers.cookie || "";
   const match = cookie
     .split(";")
     .map((c) => c.trim())
-    .find((c) => c.startsWith("token="));
-  return match ? match.slice(6) : null;
+    .find((c) => c.startsWith(`${name}=`));
+  return match ? match.slice(name.length + 1) : null;
+}
+
+function getToken(req) {
+  const auth = req.headers.authorization || "";
+  if (auth.startsWith("Bearer ")) return auth.slice(7);
+  return getCookie(req, "token");
 }
 
 function authMiddleware(req, res, next) {
-  const token = getTokenFromCookies(req);
+  const token = getToken(req);
   if (!token) return res.status(401).json({ error: "TOKEN_MISSING" });
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || "devsecret");
     req.user = decoded;
-    next();
   } catch {
     return res.status(401).json({ error: "TOKEN_INVALID" });
   }
+  const csrfCookie = getCookie(req, "csrfToken");
+  const csrfHeader = req.get("x-csrf-token");
+  if (!csrfCookie || !csrfHeader || csrfCookie !== csrfHeader) {
+    return res.status(403).json({ error: "CSRF_INVALID" });
+  }
+  next();
 }
 
 app.get("/", (req, res) => {
@@ -315,7 +324,9 @@ app.post("/auth/register", authLimiter, async (req, res) => {
     );
     const user = rows[0];
     const token = signToken(user);
-    res.cookie('token', token, { httpOnly: true, secure: true, sameSite: 'lax' });
+    const csrfToken = crypto.randomBytes(20).toString("hex");
+    res.cookie("token", token, { httpOnly: true, secure: true, sameSite: "lax" });
+    res.cookie("csrfToken", csrfToken, { secure: true, sameSite: "lax" });
     res.status(201).json({ user, token });
   } catch (e) {
     if (e instanceof z.ZodError) {
@@ -344,7 +355,9 @@ app.post("/auth/login", authLimiter, async (req, res) => {
       if (!validTotp) return res.status(401).json({ error: "INVALID_TOTP" });
     }
     const token = signToken(user);
-    res.cookie('token', token, { httpOnly: true, secure: true, sameSite: 'lax' });
+    const csrfToken = crypto.randomBytes(20).toString("hex");
+    res.cookie("token", token, { httpOnly: true, secure: true, sameSite: "lax" });
+    res.cookie("csrfToken", csrfToken, { secure: true, sameSite: "lax" });
     res.json({ user: { id: user.id, name: user.name, email: user.email }, token });
   } catch (e) {
     if (e instanceof z.ZodError) {

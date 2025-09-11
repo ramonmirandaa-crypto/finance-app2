@@ -5,6 +5,13 @@ export async function apiFetch(path, options = {}) {
     'Content-Type': 'application/json',
     ...(options.headers || {})
   };
+  const csrfMatch = typeof document !== 'undefined'
+    ? document.cookie
+        ?.split(';')
+        .map((c) => c.trim())
+        .find((c) => c.startsWith('csrfToken='))
+    : null;
+  if (csrfMatch) headers['x-csrf-token'] = csrfMatch.slice('csrfToken='.length);
   const res = await fetch(`${BASE}${path}`, { ...options, headers, credentials: 'include' });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
