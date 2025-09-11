@@ -6,6 +6,7 @@ import pkg from "pg";
 import Pluggy from "pluggy-sdk";
 import { z } from "zod";
 import rateLimit from "express-rate-limit";
+import helmet from "helmet";
 import logger from "./logger.js";
 import { createRequire } from "module";
 import crypto from "crypto";
@@ -29,6 +30,7 @@ app.use(
   })
 );
 app.use(require("pino-http")({ logger }));
+app.use(helmet());
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
