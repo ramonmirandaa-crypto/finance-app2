@@ -2,20 +2,17 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/lib/auth';
-import { getMe } from '@/lib/api';
 
 export default function Dashboard() {
   const router = useRouter();
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    if (!auth.isAuthenticated()) {
-      router.replace('/login');
-      return;
-    }
-    getMe()
-      .then((d) => setUser(d.user))
-      .catch(() => router.replace('/login'));
+    auth.getUser()
+      .then(setUser)
+      .catch((e) => {
+        if (e.status === 401) router.replace('/login');
+      });
   }, [router]);
 
   if (!user) return null;

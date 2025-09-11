@@ -23,11 +23,15 @@ export default function Page() {
     ]);
 
   useEffect(() => {
-    if (!auth.isAuthenticated()) {
-      router.replace('/login');
-      return;
-    }
-    loadAll().catch(() => router.replace('/login'));
+    const init = async () => {
+      try {
+        await auth.getUser();
+        await loadAll();
+      } catch (e) {
+        if (e.status === 401) router.replace('/login');
+      }
+    };
+    init();
   }, [router]);
 
   const handleSync = async (id) => {
@@ -92,4 +96,3 @@ export default function Page() {
     </section>
   );
 }
-

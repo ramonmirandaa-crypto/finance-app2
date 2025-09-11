@@ -8,9 +8,11 @@ export default function AuthGuard({ children }) {
   const router = useRouter();
 
   useEffect(() => {
-    const t = auth.get();
-    if (!t) router.replace('/login');
-    else setOk(true);
+    auth.getUser()
+      .then(() => setOk(true))
+      .catch((e) => {
+        if (e.status === 401) router.replace('/login');
+      });
   }, [router]);
 
   if (!ok) return null;
