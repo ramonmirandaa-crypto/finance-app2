@@ -310,7 +310,7 @@ app.post("/auth/register", authLimiter, async (req, res) => {
       sameSite: "lax",
     });
 
-    res.status(201).json({ user, token });
+    res.status(201).json({ user });
   } catch (e) {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
@@ -351,7 +351,7 @@ app.post("/auth/login", authLimiter, async (req, res) => {
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
     });
-    res.json({ user: { id: user.id, name: user.name, email: user.email }, token });
+    res.json({ user: { id: user.id, name: user.name, email: user.email } });
   } catch (e) {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });

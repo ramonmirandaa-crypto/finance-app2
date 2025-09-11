@@ -18,11 +18,11 @@ export default function LoginPage() {
     try {
       const body = { email, password: senha };
       if (needsTotp) body.totp = totp;
-      const data = await apiFetch('/auth/login', {
+      await apiFetch('/auth/login', {
         method: 'POST',
         body: JSON.stringify(body)
       });
-      auth.save(data.token);
+      auth.save();
       router.replace('/dashboard');
     } catch (e) {
       if (e?.data?.error === 'TOTP_REQUIRED') {
