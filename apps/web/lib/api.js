@@ -108,3 +108,14 @@ export async function createReport(data) {
     body: JSON.stringify(data),
   });
 }
+
+export async function setup2fa() {
+  return apiFetch('/auth/2fa/setup', { method: 'POST' });
+}
+
+export async function verify2fa(token) {
+  return apiFetch('/auth/2fa/verify', {
+    method: 'POST',
+    body: JSON.stringify({ token }),
+  });
+}
