@@ -340,9 +340,11 @@ app.post("/auth/register", authLimiter, async (req, res) => {
     );
     const user = rows[0];
     const token = signToken(user);
+
     const csrfToken = crypto.randomBytes(20).toString("hex");
     res.cookie("token", token, { httpOnly: true, secure: true, sameSite: "lax" });
     res.cookie("csrfToken", csrfToken, { secure: true, sameSite: "lax" });
+
     res.status(201).json({ user, token });
   } catch (e) {
     if (e instanceof z.ZodError) {
