@@ -224,7 +224,7 @@ app.get("/me", authMiddleware, async (req, res) => {
 app.get("/accounts", authMiddleware, async (req, res) => {
   const { rows } = await pool.query(
     `SELECT id, agency,
-            pgp_sym_decrypt(account_number, $2) AS number,
+            RIGHT(pgp_sym_decrypt(account_number, $2), 4) AS number,
             pgp_sym_decrypt(manager, $2) AS manager,
             pgp_sym_decrypt(phone, $2) AS phone
        FROM accounts
