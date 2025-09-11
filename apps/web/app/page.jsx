@@ -20,7 +20,7 @@ export default function Home() {
         background: 'linear-gradient(180deg, rgba(255,255,255,0.7), rgba(255,255,255,0.35))',
         maxWidth: 640
       }}>
-        <h1 style={{margin: 0, fontSize: 28, fontWeight: 700}}>Finance App</h1>
+        <h1 style={{margin: 0, fontSize: 28, fontWeight: 700}}>FinAI</h1>
         <p style={{margin: '12px 0 0 0', lineHeight: 1.5}}>
           Frontend Next.js em execução. API esperada em: <strong>{apiUrl}</strong>.
         </p>

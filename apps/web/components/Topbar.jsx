@@ -24,7 +24,7 @@ export default function Topbar({ user }) {
       borderBottom: '1px solid rgba(0,0,0,0.06)',
       zIndex: 10
     }}>
-      <div style={{fontWeight: 700}}>Finance App</div>
+      <div style={{fontWeight: 700}}>FinAI</div>
       <div style={{display:'flex', gap:12, alignItems:'center'}}>
         <span style={{fontSize:14, opacity:0.8}}>
           {user?.name ? `Olá, ${user.name}` : ''}
