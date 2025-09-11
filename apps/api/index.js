@@ -224,7 +224,10 @@ app.post("/auth/register", authLimiter, async (req, res) => {
 app.post("/auth/login", authLimiter, async (req, res) => {
   try {
     const { email, password, totp } = await LoginSchema.parseAsync(req.body);
-    const { rows } = await pool.query("SELECT * FROM users WHERE email = $1", [email.toLowerCase()]);
+    const { rows } = await pool.query(
+      "SELECT id, name, email, password_hash, twofa_enabled, pgp_sym_decrypt(twofa_secret, $2) AS twofa_secret FROM users WHERE email = $1",
+      [email.toLowerCase(), ENC_KEY]
+    );
     const user = rows[0];
     if (!user) return res.status(401).json({ error: "INVALID_CREDENTIALS" });
     const ok = await bcrypt.compare(password, user.password_hash);
@@ -265,8 +268,8 @@ app.post("/auth/2fa/setup", authMiddleware, async (req, res) => {
   try {
     const secret = speakeasy.generateSecret({ name: "Finance App" });
     await pool.query(
-      "UPDATE users SET twofa_secret = $1, twofa_enabled = FALSE WHERE id = $2",
-      [secret.base32, req.user.sub]
+      "UPDATE users SET twofa_secret = pgp_sym_encrypt($1, $3, 'cipher-algo=aes256'), twofa_enabled = FALSE WHERE id = $2",
+      [secret.base32, req.user.sub, ENC_KEY]
     );
     const qrcode = await QRCode.toDataURL(secret.otpauth_url);
     res.json({ qrcode });
@@ -280,8 +283,8 @@ app.post("/auth/2fa/verify", authMiddleware, async (req, res) => {
   try {
     const { token } = await TotpSchema.parseAsync(req.body);
     const { rows } = await pool.query(
-      "SELECT twofa_secret FROM users WHERE id = $1",
-      [req.user.sub]
+      "SELECT pgp_sym_decrypt(twofa_secret, $2) AS twofa_secret FROM users WHERE id = $1",
+      [req.user.sub, ENC_KEY]
     );
     const secret = rows[0]?.twofa_secret;
     const ok = speakeasy.totp.verify({ secret, encoding: "base32", token });
@@ -304,8 +307,8 @@ app.delete("/auth/2fa", authMiddleware, async (req, res) => {
   try {
     const { token } = await TotpSchema.parseAsync(req.body);
     const { rows } = await pool.query(
-      "SELECT twofa_secret FROM users WHERE id = $1",
-      [req.user.sub]
+      "SELECT pgp_sym_decrypt(twofa_secret, $2) AS twofa_secret FROM users WHERE id = $1",
+      [req.user.sub, ENC_KEY]
     );
     const secret = rows[0]?.twofa_secret;
     const ok = speakeasy.totp.verify({ secret, encoding: "base32", token });
