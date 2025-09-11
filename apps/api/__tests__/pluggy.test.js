@@ -22,14 +22,13 @@ const mockPluggyInstance = {
 };
 const MockPluggy = jest.fn(() => mockPluggyInstance);
 await jest.unstable_mockModule('pluggy-sdk', () => ({ default: MockPluggy }));
+const webhookSecret = 'testsecret';
+process.env.PLUGGY_WEBHOOK_SECRET = webhookSecret;
 
 const { default: app } = await import('../index.js');
 const pool = mockPoolInstance;
 const token = jwt.sign({ sub: '1', name: 'Alice', email: 'alice@example.com' }, 'devsecret');
 const csrf = 'test-csrf';
-
-const webhookSecret = 'testsecret';
-process.env.PLUGGY_WEBHOOK_SECRET = webhookSecret;
 const sign = (body) =>
   crypto.createHmac('sha256', webhookSecret).update(JSON.stringify(body)).digest('base64');
 

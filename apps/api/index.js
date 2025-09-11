@@ -32,6 +32,10 @@ if (!process.env.DATA_ENCRYPTION_KEY) {
     throw new Error("DATA_ENCRYPTION_KEY is not defined");
   }
 }
+if (!process.env.PLUGGY_WEBHOOK_SECRET) {
+  throw new Error("PLUGGY_WEBHOOK_SECRET is not defined");
+}
+const PLUGGY_WEBHOOK_SECRET = process.env.PLUGGY_WEBHOOK_SECRET;
 const require = createRequire(import.meta.url);
 const { Pool } = pkg;
 const knexClient = knex(knexConfig);
@@ -1379,9 +1383,8 @@ app.post("/pluggy/items/:id/sync", authMiddleware, async (req, res) => {
 
 app.post("/pluggy/webhook", async (req, res) => {
   const signature = req.get("x-pluggy-signature");
-  const secret = process.env.PLUGGY_WEBHOOK_SECRET || "";
   const expected = crypto
-    .createHmac("sha256", secret)
+    .createHmac("sha256", PLUGGY_WEBHOOK_SECRET)
     .update(req.rawBody || "")
     .digest("base64");
   if (
