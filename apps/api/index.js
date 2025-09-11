@@ -15,6 +15,7 @@ import { getRate } from "./exchange.js";
 import knex from "knex";
 import knexConfig from "./knexfile.js";
 import QRCode from "qrcode";
+import cron from "node-cron";
 
 dotenv.config();
 if (!process.env.JWT_SECRET) {
@@ -121,6 +122,17 @@ const TransactionSchema = z.object({
   amount: z.number(),
   currency: z.string(),
   date: z.string(),
+  description: z.string().optional(),
+});
+
+const ScheduledTransactionSchema = z.object({
+  accountId: z.string().uuid(),
+  categoryId: z.string().uuid().optional(),
+  type: z.string(),
+  amount: z.number(),
+  currency: z.string(),
+  date: z.string(),
+  executeAt: z.string(),
   description: z.string().optional(),
 });
 
@@ -796,6 +808,49 @@ app.delete("/recurrings/:id", authMiddleware, async (req, res) => {
   res.status(204).send();
 });
 
+// Scheduled Transactions
+app.get("/scheduled-transactions", authMiddleware, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id, account_id AS "accountId", category_id AS "categoryId", type, amount, currency, date,
+            execute_at AS "executeAt", pgp_sym_decrypt(description, $2) AS description
+       FROM scheduled_transactions
+       WHERE user_id = $1
+       ORDER BY execute_at ASC`,
+    [req.user.sub, ENC_KEY]
+  );
+  res.json({ scheduledTransactions: rows });
+});
+
+app.post("/scheduled-transactions", authMiddleware, async (req, res) => {
+  try {
+    const { accountId, categoryId, type, amount, currency, date, executeAt, description } =
+      await ScheduledTransactionSchema.parseAsync(req.body);
+    const { rows } = await pool.query(
+      `INSERT INTO scheduled_transactions (user_id, account_id, category_id, type, amount, currency, date, execute_at, description)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8, pgp_sym_encrypt($9,$10,'cipher-algo=aes256'))
+         RETURNING id, account_id AS "accountId", category_id AS "categoryId", type, amount, currency, date,
+                   execute_at AS "executeAt", pgp_sym_decrypt(description,$10) AS description`,
+      [req.user.sub, accountId, categoryId, type, amount, currency, date, executeAt, description, ENC_KEY]
+    );
+    res.status(201).json({ scheduledTransaction: rows[0] });
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
+    }
+    logger.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+app.delete("/scheduled-transactions/:id", authMiddleware, async (req, res) => {
+  const result = await pool.query(
+    "DELETE FROM scheduled_transactions WHERE id = $1 AND user_id = $2",
+    [req.params.id, req.user.sub]
+  );
+  if (result.rowCount === 0) return res.status(404).json({ error: "NOT_FOUND" });
+  res.status(204).send();
+});
+
 // Subscriptions
 app.get("/subscriptions", authMiddleware, async (req, res) => {
   const { rows } = await pool.query(
@@ -1391,6 +1446,29 @@ async function processRecurrings() {
   }
 }
 
+async function processScheduled() {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, user_id, account_id, category_id, type, amount, currency, date,
+              pgp_sym_decrypt(description, $1) AS description
+         FROM scheduled_transactions
+         WHERE execute_at <= NOW()`,
+      [ENC_KEY]
+    );
+    for (const t of rows) {
+      await pool.query(
+        `INSERT INTO transactions (user_id, account_id, category_id, type, amount, currency, date, description)
+           VALUES ($1,$2,$3,$4,$5,$6,$7, pgp_sym_encrypt($8,$9,'cipher-algo=aes256'))`,
+        [t.user_id, t.account_id, t.category_id, t.type, t.amount, t.currency, t.date, t.description, ENC_KEY]
+      );
+      await checkBudget(t.user_id, t.category_id);
+      await pool.query(`DELETE FROM scheduled_transactions WHERE id = $1`, [t.id]);
+    }
+  } catch (e) {
+    logger.error(e);
+  }
+}
+
 const PORT = process.env.PORT || 4000;
 
 // Evita iniciar o servidor automaticamente durante os testes
@@ -1398,6 +1476,7 @@ if (process.env.NODE_ENV !== "test") {
   knexClient.migrate.latest().then(() => {
     app.listen(PORT, () => logger.info(`API online na porta ${PORT}`));
     setInterval(processRecurrings, 60 * 1000);
+    cron.schedule("* * * * *", processScheduled);
   });
 }
 

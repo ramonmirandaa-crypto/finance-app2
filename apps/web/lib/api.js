@@ -266,6 +266,21 @@ export async function deleteSubscription(id) {
   return apiFetch(`/subscriptions/${id}`, { method: 'DELETE' });
 }
 
+export async function getScheduledTransactions() {
+  return apiFetch('/scheduled-transactions');
+}
+
+export async function createScheduledTransaction(data) {
+  return apiFetch('/scheduled-transactions', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteScheduledTransaction(id) {
+  return apiFetch(`/scheduled-transactions/${id}`, { method: 'DELETE' });
+}
+
 export async function getNotifications() {
   return apiFetch('/notifications');
 }
