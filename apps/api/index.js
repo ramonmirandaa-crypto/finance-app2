@@ -900,15 +900,27 @@ app.use((err, _req, res, _next) => {
 });
 
 const PORT = process.env.PORT || 4000;
+let scheduler;
 
 if (process.env.NODE_ENV !== "test") {
   knexClient.migrate.latest().then(() => {
     app.listen(PORT, () => logger.info(`API online na porta ${PORT}`));
-    initScheduler({ pool, ENC_KEY, checkBudget, logger });
+    scheduler = initScheduler({ pool, ENC_KEY, checkBudget, logger });
   });
 }
 
+async function shutdown() {
+  try {
+    scheduler?.stop();
+    await pool.end();
+    await knexClient.destroy();
+  } finally {
+    process.exit(0);
+  }
+}
 
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
 
 export { app, pool };
 export default app;
