@@ -85,6 +85,37 @@ const CardSchema = z.object({
   limit: z.number(),
 });
 
+const CategorySchema = z.object({
+  name: z.string(),
+});
+
+const BudgetSchema = z.object({
+  categoryId: z.string().uuid(),
+  amount: z.number(),
+  currency: z.string(),
+  transactionId: z.string().optional(),
+});
+
+const GoalSchema = z.object({
+  name: z.string(),
+  target: z.number(),
+  currency: z.string(),
+  deadline: z.string().optional(),
+  transactionId: z.string().optional(),
+});
+
+const InvestmentSchema = z.object({
+  description: z.string(),
+  amount: z.number(),
+  currency: z.string(),
+  transactionId: z.string().optional(),
+});
+
+const ReportSchema = z.object({
+  name: z.string(),
+  data: z.any().optional(),
+});
+
 const PluggyItemSchema = z.object({
   itemId: z.string(),
 });
@@ -141,6 +172,62 @@ async function ensureSchema() {
       status TEXT NOT NULL,
       error TEXT,
       last_sync TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS categories (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS budgets (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
+      amount NUMERIC NOT NULL,
+      currency TEXT NOT NULL,
+      pluggy_transaction_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS goals (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      target NUMERIC NOT NULL,
+      currency TEXT NOT NULL,
+      deadline DATE,
+      pluggy_transaction_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS investments (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      description TEXT NOT NULL,
+      amount NUMERIC NOT NULL,
+      currency TEXT NOT NULL,
+      pluggy_transaction_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS reports (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      data JSONB,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
@@ -419,6 +506,146 @@ app.delete("/cards/:id", authMiddleware, async (req, res) => {
   );
   if (result.rowCount === 0) return res.status(404).json({ error: "NOT_FOUND" });
   res.status(204).send();
+});
+
+// Categories
+app.get("/categories", authMiddleware, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id, name FROM categories WHERE user_id = $1 ORDER BY created_at DESC`,
+    [req.user.sub]
+  );
+  res.json({ categories: rows });
+});
+
+app.post("/categories", authMiddleware, async (req, res) => {
+  try {
+    const { name } = await CategorySchema.parseAsync(req.body);
+    const { rows } = await pool.query(
+      `INSERT INTO categories (user_id, name) VALUES ($1,$2) RETURNING id, name`,
+      [req.user.sub, name]
+    );
+    res.status(201).json({ category: rows[0] });
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
+    }
+    logger.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+// Budgets
+app.get("/budgets", authMiddleware, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id, category_id AS "categoryId", amount, currency, pluggy_transaction_id AS "transactionId"
+       FROM budgets WHERE user_id = $1 ORDER BY created_at DESC`,
+    [req.user.sub]
+  );
+  res.json({ budgets: rows });
+});
+
+app.post("/budgets", authMiddleware, async (req, res) => {
+  try {
+    const { categoryId, amount, currency, transactionId } = await BudgetSchema.parseAsync(req.body);
+    const { rows } = await pool.query(
+      `INSERT INTO budgets (user_id, category_id, amount, currency, pluggy_transaction_id)
+         VALUES ($1,$2,$3,$4,$5)
+         RETURNING id, category_id AS "categoryId", amount, currency,
+                   pluggy_transaction_id AS "transactionId"`,
+      [req.user.sub, categoryId, amount, currency, transactionId]
+    );
+    res.status(201).json({ budget: rows[0] });
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
+    }
+    logger.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+// Goals
+app.get("/goals", authMiddleware, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id, name, target, currency, deadline, pluggy_transaction_id AS "transactionId"
+       FROM goals WHERE user_id = $1 ORDER BY created_at DESC`,
+    [req.user.sub]
+  );
+  res.json({ goals: rows });
+});
+
+app.post("/goals", authMiddleware, async (req, res) => {
+  try {
+    const { name, target, currency, deadline, transactionId } = await GoalSchema.parseAsync(req.body);
+    const { rows } = await pool.query(
+      `INSERT INTO goals (user_id, name, target, currency, deadline, pluggy_transaction_id)
+         VALUES ($1,$2,$3,$4,$5,$6)
+         RETURNING id, name, target, currency, deadline, pluggy_transaction_id AS "transactionId"`,
+      [req.user.sub, name, target, currency, deadline, transactionId]
+    );
+    res.status(201).json({ goal: rows[0] });
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
+    }
+    logger.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+// Investments
+app.get("/investments", authMiddleware, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id, description, amount, currency, pluggy_transaction_id AS "transactionId"
+       FROM investments WHERE user_id = $1 ORDER BY created_at DESC`,
+    [req.user.sub]
+  );
+  res.json({ investments: rows });
+});
+
+app.post("/investments", authMiddleware, async (req, res) => {
+  try {
+    const { description, amount, currency, transactionId } = await InvestmentSchema.parseAsync(req.body);
+    const { rows } = await pool.query(
+      `INSERT INTO investments (user_id, description, amount, currency, pluggy_transaction_id)
+         VALUES ($1,$2,$3,$4,$5)
+         RETURNING id, description, amount, currency, pluggy_transaction_id AS "transactionId"`,
+      [req.user.sub, description, amount, currency, transactionId]
+    );
+    res.status(201).json({ investment: rows[0] });
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
+    }
+    logger.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+// Reports
+app.get("/reports", authMiddleware, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id, name, data FROM reports WHERE user_id = $1 ORDER BY created_at DESC`,
+    [req.user.sub]
+  );
+  res.json({ reports: rows });
+});
+
+app.post("/reports", authMiddleware, async (req, res) => {
+  try {
+    const { name, data } = await ReportSchema.parseAsync(req.body);
+    const { rows } = await pool.query(
+      `INSERT INTO reports (user_id, name, data) VALUES ($1,$2,$3) RETURNING id, name, data`,
+      [req.user.sub, name, data]
+    );
+    res.status(201).json({ report: rows[0] });
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
+    }
+    logger.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
 });
 
 // Pluggy routes

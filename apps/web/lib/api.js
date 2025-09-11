@@ -53,3 +53,58 @@ export async function getPluggyItems() {
 export async function syncPluggyItem(id) {
   return apiFetch(`/pluggy/items/${id}/sync`, { method: 'POST' });
 }
+
+export async function getCategories() {
+  return apiFetch('/categories');
+}
+
+export async function createCategory(data) {
+  return apiFetch('/categories', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getBudgets() {
+  return apiFetch('/budgets');
+}
+
+export async function createBudget(data) {
+  return apiFetch('/budgets', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getGoals() {
+  return apiFetch('/goals');
+}
+
+export async function createGoal(data) {
+  return apiFetch('/goals', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getInvestments() {
+  return apiFetch('/investments');
+}
+
+export async function createInvestment(data) {
+  return apiFetch('/investments', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getReports() {
+  return apiFetch('/reports');
+}
+
+export async function createReport(data) {
+  return apiFetch('/reports', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
