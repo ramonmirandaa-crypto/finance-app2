@@ -54,4 +54,18 @@ describe('Pluggy routes', () => {
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(202);
   });
+
+  test('webhook requires itemId', async () => {
+    const res = await request(app).post('/pluggy/webhook').send({});
+    expect(res.status).toBe(400);
+  });
+
+  test('webhook saves item', async () => {
+    pool.query.mockResolvedValue({});
+    const res = await request(app)
+      .post('/pluggy/webhook')
+      .send({ itemId: 'it1' });
+    expect(res.status).toBe(200);
+    expect(pool.query).toHaveBeenCalledTimes(2);
+  });
 });
