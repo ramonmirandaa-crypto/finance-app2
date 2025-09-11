@@ -10,6 +10,7 @@ import helmet from "helmet";
 import logger from "./logger.js";
 import { createRequire } from "module";
 import crypto from "crypto";
+import speakeasy from "speakeasy";
 
 dotenv.config();
 const require = createRequire(import.meta.url);
@@ -70,6 +71,10 @@ const RegisterSchema = z.object({
 const LoginSchema = z.object({
   email: z.string().email(),
   password: z.string(),
+});
+
+const TotpSchema = z.object({
+  token: z.string().length(6),
 });
 
 const AccountSchema = z.object({
@@ -302,6 +307,30 @@ app.post("/auth/login", authLimiter, async (req, res) => {
     const token = signToken(user);
     res.cookie('token', token, { httpOnly: true, secure: true });
     res.json({ user: { id: user.id, name: user.name, email: user.email }, token });
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
+    }
+    logger.error(e);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+app.delete("/auth/2fa", authMiddleware, async (req, res) => {
+  try {
+    const { token } = await TotpSchema.parseAsync(req.body);
+    const { rows } = await pool.query(
+      "SELECT twofa_secret FROM users WHERE id = $1",
+      [req.user.sub]
+    );
+    const secret = rows[0]?.twofa_secret;
+    const ok = speakeasy.totp.verify({ secret, encoding: "base32", token });
+    if (!ok) return res.status(400).json({ error: "INVALID_TOTP" });
+    await pool.query(
+      "UPDATE users SET twofa_secret = NULL, twofa_enabled = FALSE WHERE id = $1",
+      [req.user.sub]
+    );
+    res.json({});
   } catch (e) {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
