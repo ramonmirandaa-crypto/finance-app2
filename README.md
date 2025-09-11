@@ -1,5 +1,5 @@
-# finance-app
-Aplicação para gestão de finanças.
+# FinAI
+FinAI é uma aplicação para gestão de finanças.
 
 ## Configuração do Frontend
 
