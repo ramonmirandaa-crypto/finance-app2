@@ -36,6 +36,7 @@ app.use((req, res, next) => {
   res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
@@ -142,9 +143,17 @@ function signToken(user) {
   return jwt.sign(payload, process.env.JWT_SECRET || "devsecret", { expiresIn: "7d" });
 }
 
+function getTokenFromCookies(req) {
+  const cookie = req.headers.cookie || "";
+  const match = cookie
+    .split(";")
+    .map((c) => c.trim())
+    .find((c) => c.startsWith("token="));
+  return match ? match.slice(6) : null;
+}
+
 function authMiddleware(req, res, next) {
-  const hdr = req.headers.authorization || "";
-  const token = hdr.startsWith("Bearer ") ? hdr.slice(7) : null;
+  const token = getTokenFromCookies(req);
   if (!token) return res.status(401).json({ error: "TOKEN_MISSING" });
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || "devsecret");
@@ -170,7 +179,8 @@ app.post("/auth/register", authLimiter, async (req, res) => {
     );
     const user = rows[0];
     const token = signToken(user);
-    res.status(201).json({ user, token });
+    res.cookie('token', token, { httpOnly: true, secure: true });
+    res.status(201).json({ user });
   } catch (e) {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });
@@ -193,7 +203,8 @@ app.post("/auth/login", authLimiter, async (req, res) => {
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) return res.status(401).json({ error: "INVALID_CREDENTIALS" });
     const token = signToken(user);
-    res.json({ user: { id: user.id, name: user.name, email: user.email }, token });
+    res.cookie('token', token, { httpOnly: true, secure: true });
+    res.json({ user: { id: user.id, name: user.name, email: user.email } });
   } catch (e) {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: "VALIDATION_ERROR", details: e.errors });

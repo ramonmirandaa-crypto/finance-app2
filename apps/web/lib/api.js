@@ -1,16 +1,11 @@
-import { auth } from './auth';
-
 const BASE = process.env.NEXT_PUBLIC_API_URL;
 
 export async function apiFetch(path, options = {}) {
-  const token = auth.get();
   const headers = {
     'Content-Type': 'application/json',
     ...(options.headers || {})
   };
-  if (token) headers.Authorization = `Bearer ${token}`;
-
-  const res = await fetch(`${BASE}${path}`, { ...options, headers });
+  const res = await fetch(`${BASE}${path}`, { ...options, headers, credentials: 'include' });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const err = new Error(data?.error || 'REQUEST_FAILED');

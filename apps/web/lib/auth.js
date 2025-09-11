@@ -9,20 +9,22 @@ function decodePayload(token) {
 }
 
 export const auth = {
-  save(token) {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('token', token);
-    }
+  save(_token) {
+    // Token is stored in httpOnly cookie by the server
   },
   get() {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('token');
+    if (typeof document !== 'undefined') {
+      const match = document.cookie
+        ?.split(';')
+        .map((c) => c.trim())
+        .find((c) => c.startsWith('token='));
+      return match ? match.slice(6) : null;
     }
     return null;
   },
   clear() {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('token');
+    if (typeof document !== 'undefined') {
+      document.cookie = 'token=; Max-Age=0; path=/';
     }
   },
   getUser() {
