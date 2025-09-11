@@ -15,7 +15,7 @@ services:
       retries: 5
 
   api:
-    image: <seu-registro>/finai-api:latest
+    image: ramonmirandaa-crypto/finai-api:latest
     environment:
       PORT: 4000
       DB_HOST: db
@@ -32,7 +32,7 @@ services:
         condition: service_healthy
 
   web:
-    image: <seu-registro>/finai-web:latest
+    image: ramonmirandaa-crypto/finai-web:latest
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:4000
     ports:
