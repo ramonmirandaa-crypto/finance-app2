@@ -6,7 +6,7 @@ const mockPoolInstance = { query: jest.fn() };
 const MockPool = jest.fn(() => mockPoolInstance);
 await jest.unstable_mockModule('pg', () => ({ default: { Pool: MockPool }, Pool: MockPool }));
 
-const { default: app } = await import('../index.js');
+const { app } = await import('../index.js');
 const pool = mockPoolInstance;
 
 const token = jwt.sign({ sub: 'user-id' }, 'devsecret');
