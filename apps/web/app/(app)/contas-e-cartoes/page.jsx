@@ -2,42 +2,46 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/lib/auth';
-import {
-  getPluggyItems,
-  getPluggyAccounts,
-  getPluggyTransactions,
-  syncPluggyItem,
-} from '@/lib/api';
+import { getAccounts, getCards } from '@/lib/api';
+import AccountModal from '@/components/AccountModal';
+import CardModal from '@/components/CardModal';
 
 export default function Page() {
   const router = useRouter();
-  const [items, setItems] = useState([]);
   const [accounts, setAccounts] = useState([]);
-  const [transactions, setTransactions] = useState([]);
+  const [cards, setCards] = useState([]);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [cardOpen, setCardOpen] = useState(false);
 
-  const loadAll = () =>
-    Promise.all([
-      getPluggyItems().then((d) => setItems(d.items)),
-      getPluggyAccounts().then((d) => setAccounts(d.accounts)),
-      getPluggyTransactions().then((d) => setTransactions(d.transactions)),
-    ]);
+  const loadAccounts = async () => {
+    try {
+      const data = await getAccounts();
+      setAccounts(data.accounts || []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const loadCards = async () => {
+    try {
+      const data = await getCards();
+      setCards(data.cards || []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   useEffect(() => {
     const init = async () => {
       try {
         await auth.getUser();
-        await loadAll();
+        await Promise.all([loadAccounts(), loadCards()]);
       } catch (e) {
         if (e.status === 401) router.replace('/login');
       }
     };
     init();
   }, [router]);
-
-  const handleSync = async (id) => {
-    await syncPluggyItem(id);
-    await loadAll();
-  };
 
   return (
     <section
@@ -50,49 +54,55 @@ export default function Page() {
         boxShadow: '0 10px 30px rgba(0,0,0,0.12)',
       }}
     >
-      <h2 style={{ marginTop: 0 }}>Contas e Transações</h2>
+      <h2 style={{ marginTop: 0 }}>Contas e Cartões</h2>
 
-      <h3>Itens</h3>
-      {items.length === 0 ? (
-        <p>Nenhum item conectado.</p>
-      ) : (
-        <ul>
-          {items.map((i) => (
-            <li key={i.id}>
-              {i.connector} - {i.status}
-              <button style={{ marginLeft: 10 }} onClick={() => handleSync(i.id)}>
-                Sincronizar
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <h3 style={{ margin: 0 }}>Contas</h3>
+          <button onClick={() => setAccountOpen(true)}>Nova Conta</button>
+        </div>
+        {accounts.length === 0 ? (
+          <p>Nenhuma conta cadastrada.</p>
+        ) : (
+          <ul>
+            {accounts.map((a) => (
+              <li key={a.id}>
+                Agência {a.agency} - Conta {a.number}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
-      <h3>Contas</h3>
-      {accounts.length === 0 ? (
-        <p>Nenhuma conta encontrada.</p>
-      ) : (
-        <ul>
-          {accounts.map((a) => (
-            <li key={a.id}>
-              {a.name} - {a.balance} {a.currency}
-            </li>
-          ))}
-        </ul>
-      )}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <h3 style={{ margin: 0 }}>Cartões</h3>
+          <button onClick={() => setCardOpen(true)}>Novo Cartão</button>
+        </div>
+        {cards.length === 0 ? (
+          <p>Nenhum cartão cadastrado.</p>
+        ) : (
+          <ul>
+            {cards.map((c) => (
+              <li key={c.id}>
+                Cartão {c.number} - Vencimento {c.expiration} - Limite {c.limit}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
-      <h3>Transações</h3>
-      {transactions.length === 0 ? (
-        <p>Nenhuma transação encontrada.</p>
-      ) : (
-        <ul>
-          {transactions.map((t) => (
-            <li key={t.id}>
-              {t.description} - {t.amount} {t.currency}
-            </li>
-          ))}
-        </ul>
-      )}
+      <AccountModal
+        open={accountOpen}
+        onClose={() => setAccountOpen(false)}
+        onCreated={loadAccounts}
+      />
+      <CardModal
+        open={cardOpen}
+        onClose={() => setCardOpen(false)}
+        onCreated={loadCards}
+      />
     </section>
   );
 }
+
