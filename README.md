@@ -38,4 +38,7 @@ JWT_SECRET=changeme # required
 NEXT_PUBLIC_API_URL=http://localhost:4000
 ```
 
+Defina `NEXT_PUBLIC_API_URL` para o endereço da API; sem essa variável, o frontend
+não consegue realizar requisições e apenas exibirá erros no console.
+
 Sem essas variáveis, as aplicações podem não inicializar corretamente.
