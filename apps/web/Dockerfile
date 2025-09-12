@@ -6,7 +6,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
-RUN npm run build
+RUN npm run build || (npm install && npm run build)
 RUN npm prune --omit=dev
 
 # Etapa 2: produção
