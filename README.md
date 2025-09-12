@@ -1,6 +1,10 @@
 # FinAI
 FinAI é uma aplicação para gestão de finanças.
 
+## Requisitos
+
+- Docker para executar `docker compose build` e `docker compose up -d`. Você pode rodar `./scripts/check_docker.sh` para verificar se o Docker está instalado.
+
 ## Versão do Node.js
 
 As imagens Docker utilizam a tag `node:20.12-alpine` para garantir consistência
