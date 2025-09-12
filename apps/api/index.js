@@ -5,6 +5,12 @@ import jwt from "jsonwebtoken";
 import pkg from "pg";
 
 dotenv.config();
+
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error("JWT_SECRET environment variable is required");
+}
+
 const { Pool } = pkg;
 
 const app = express();
@@ -52,7 +58,7 @@ async function ensureSchema(p = pool) {
 
 function signToken(user) {
   const payload = { sub: user.id, name: user.name, email: user.email };
-  return jwt.sign(payload, process.env.JWT_SECRET || "devsecret", { expiresIn: "7d" });
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
 }
 
 function authMiddleware(req, res, next) {
@@ -60,7 +66,7 @@ function authMiddleware(req, res, next) {
   const token = hdr.startsWith("Bearer ") ? hdr.slice(7) : null;
   if (!token) return res.status(401).json({ error: "TOKEN_MISSING" });
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "devsecret");
+    const decoded = jwt.verify(token, JWT_SECRET);
     req.user = decoded;
     next();
   } catch {

@@ -19,6 +19,8 @@ As migrações do banco de dados usam `knexfile.js`, que lê as variáveis `DB_H
 
 ### API (`apps/api`)
 
+`JWT_SECRET` é obrigatório; a API não inicia sem essa variável.
+
 ```env
 PORT=4000
 FRONTEND_ORIGIN=http://localhost:3000
@@ -27,7 +29,7 @@ DB_PORT=5432
 DB_NAME=finai
 DB_USER=postgres
 DB_PASSWORD=postgres
-JWT_SECRET=changeme
+JWT_SECRET=changeme # required
 ```
 
 ### Frontend (`apps/web`)
