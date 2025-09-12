@@ -4,9 +4,8 @@ FROM node:20.12-bullseye AS builder
 ENV NODE_ENV=production
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
 COPY . .
-RUN npm run build || (npm install && npm run build)
+RUN npm ci && npm run build
 RUN npm prune --omit=dev
 
 # Etapa 2: produção
