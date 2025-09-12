@@ -6,7 +6,7 @@
     "start": "npm --prefix apps/api start",
     "test": "npm run test:api && npm run test:web",
     "test:api": "npm --prefix apps/api test",
-    "test:web": "npm --prefix apps/web test"
+    "test:web": "npm --prefix apps/web exec playwright install --with-deps && npm --prefix apps/web test"
   },
   "author": "Ramon Miranda",
   "license": "ISC",
