@@ -1,6 +1,11 @@
 # FinAI
 FinAI é uma aplicação para gestão de finanças.
 
+## Versão do Node.js
+
+As imagens Docker utilizam a tag `node:20.12-alpine` para garantir consistência
+entre ambientes. Atualize essa versão quando houver novas releases do Node.js.
+
 ## Variáveis de ambiente
 
 Copie os arquivos `.env.example` para `.env` dentro de `apps/api` e `apps/web`
