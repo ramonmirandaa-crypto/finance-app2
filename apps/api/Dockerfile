@@ -13,5 +13,7 @@ FROM node:20.12-alpine
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=builder /app ./
+RUN addgroup app && adduser -S -G app app
 EXPOSE 4000
+USER app
 CMD ["npm", "start"]
