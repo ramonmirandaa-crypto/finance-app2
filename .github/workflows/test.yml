@@ -38,7 +38,8 @@ jobs:
       - name: Install dependencies
         run: npm install
       - name: Run migrations
-        run: npx knex migrate:latest --knexfile ../../knexfile.js
+        run: npx knex migrate:latest --knexfile knexfile.js
+        working-directory: apps/api
       - name: Run tests
         run: npm test
 
