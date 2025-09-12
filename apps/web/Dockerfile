@@ -5,9 +5,10 @@ RUN apk add --no-cache libc6-compat
 ENV NODE_ENV=production
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci
 COPY . .
 RUN npm run build
+RUN npm prune --omit=dev
 
 # Etapa 2: produção
 # Keep in sync with the builder stage above.
