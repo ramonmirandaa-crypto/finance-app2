@@ -1,12 +1,18 @@
 import { auth } from './auth';
 
-const BASE = process.env.NEXT_PUBLIC_API_URL;
+const BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
 if (!BASE) {
-  throw new Error('NEXT_PUBLIC_API_URL environment variable is required');
+  console.error('NEXT_PUBLIC_API_URL environment variable is missing');
 }
 
 export async function apiFetch(path, options = {}) {
+  if (!BASE) {
+    return Promise.reject(
+      new Error('NEXT_PUBLIC_API_URL is not configured; requests cannot be made')
+    );
+  }
+
   const token = auth.get();
   const headers = {
     'Content-Type': 'application/json',
