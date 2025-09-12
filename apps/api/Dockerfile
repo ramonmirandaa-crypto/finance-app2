@@ -1,5 +1,6 @@
 # Etapa 1: build
-FROM node:20-alpine AS builder
+# Node.js version pinned for reproducible builds. Update as needed.
+FROM node:20.12-alpine AS builder
 ENV NODE_ENV=production
 WORKDIR /app
 COPY package*.json ./
@@ -7,7 +8,8 @@ RUN npm ci --omit=dev
 COPY . .
 
 # Etapa 2: produção
-FROM node:20-alpine
+# Keep in sync with the builder stage above.
+FROM node:20.12-alpine
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=builder /app ./
